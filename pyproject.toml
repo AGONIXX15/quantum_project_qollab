@@ -1,0 +1,22 @@
+[project]
+name = "entangle-the-andes"
+version = "0.1.0"
+description = "Build Colombia's first quantum internet, one Bell pair at a time (Qollab x IonQ Hackathon 2026)"
+requires-python = ">=3.14"
+dependencies = [
+    "qiskit>=2.5.2,<3.0.0",  # same constraint as the Qollab runtime
+    "qiskit-ionq",
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
