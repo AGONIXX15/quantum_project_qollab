@@ -18,6 +18,24 @@ Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Be
   documentation. The team reviewed and tested every change.
 - Libraries: Qiskit, qiskit-ionq (Apache 2.0), three.js (MIT).
 
+## References & credits
+
+Every module in `quantum/` lists its sources in its docstring (`References:`), and any
+snippet adapted from documentation carries an `# Adapted from: <url>` comment.
+
+Protocols and formulas:
+- Bell pairs and teleportation — Bennett et al., *Phys. Rev. Lett.* 70, 1895 (1993).
+- Werner states — Werner, *Phys. Rev. A* 40, 4277 (1989).
+- Entanglement swapping / repeaters — Żukowski et al., *PRL* 71, 4287 (1993); Briegel et al., *PRL* 81, 5932 (1998).
+- DEJMPS purification — Deutsch et al., *PRL* 77, 2818 (1996).
+- CHSH inequality — Clauser, Horne, Shimony & Holt, *PRL* 23, 880 (1969).
+- E91 / BBM92 QKD — Ekert, *PRL* 67, 661 (1991); Bennett, Brassard & Mermin, *PRL* 68, 557 (1992).
+- Key rate r = 1 − 2h(Q) — Shor & Preskill, *PRL* 85, 441 (2000).
+
+Software and docs:
+- [Qiskit](https://github.com/Qiskit/qiskit) (Apache 2.0), [qiskit-ionq](https://github.com/qiskit-community/qiskit-ionq) (Apache 2.0), [three.js](https://threejs.org) (MIT).
+- [Qollab docs](https://qollab.xyz/learn/docs/runtime-environment) for the JS ↔ Python bridge and backend handling.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
