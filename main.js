@@ -1,46 +1,62 @@
 /*
-  Entangle the Andes - orquestador de la UI.
+  Entangle the Andes - UI orchestrator (identical locally and on Qollab).
 
-  Flujo:
-    1. createClient() decide Qollab (backend real) o local (mock).
-    2. info() da niveles, parámetros y geografía.
-    3. La escena 3D se construye desde la geografía (terreno de Colombia + red).
-    4. Selector + formulario para elegir nivel y parámetros.
-    5. "Ejecutar" llama al nivel, pinta métricas y actualiza la escena 3D.
-    6. Capa educativa: explainer por nivel, leyenda y tooltips.
-
-  Idéntico en local y en Qollab: la diferencia vive en ui/api-bridge.js.
+  - `import * as api from 'quantum.api'` is STATIC (the only form Qollab resolves).
+    Locally dev/index.html maps that name to ui/mock-api.js.
+  - Every level runs through api.run_level(backend, level, params) on every backend.
+    On IonQ: 1 Run = 1 level (one packed circuit); other levels answer with the
+    recorded fallback, which is always labelled "Recorded".
+  - The LAST line must be `await new Promise(() => {})`: Qollab only lets jobs reach
+    IonQ while main.js top-level code is still pending (Stop still ends the run).
 */
 
-import { createClient } from "./ui/api-bridge.js";
-import { NetworkScene } from "./ui/scene.js";
-import { buildParamsForm, readParams, renderResult } from "./ui/panel.js";
-import { LEVEL_EXPLAIN, cityTooltip } from "./ui/explain.js";
+import * as api from "quantum.api";
+import { createBridge, DEFAULT_TIMEOUT_MS } from "./ui/api-bridge.js";
+import { NetworkScene, classifyFidelity } from "./ui/scene.js";
+import { buildParamsForm, readParams, renderResult, linkStatusCard } from "./ui/panel.js";
+import { hasExplain, explainTitle, explainBefore, explainAfter, cityTooltip } from "./ui/explain.js";
+import { t, tOr, getLang, setLang, onLangChange, applyI18n } from "./ui/i18n.js";
 
+const $ = (id) => document.getElementById(id);
 const els = {
-  scene: document.getElementById("scene-container"),
-  labels: document.getElementById("labels"),
-  loader: document.getElementById("loader"),
-  tooltip: document.getElementById("tooltip"),
-  levelSelect: document.getElementById("level-select"),
-  levelSummary: document.getElementById("level-summary"),
-  params: document.getElementById("params"),
-  runBtn: document.getElementById("run-btn"),
-  runStatus: document.getElementById("run-status"),
-  results: document.getElementById("results"),
-  explainer: document.getElementById("explainer"),
-  backendBadge: document.getElementById("backend-badge"),
-  legend: document.getElementById("legend"),
-  legendToggle: document.getElementById("legend-toggle"),
+  scene: $("scene-container"),
+  labels: $("labels"),
+  loader: $("loader"),
+  tooltip: $("tooltip"),
+  levelSelect: $("level-select"),
+  levelSummary: $("level-summary"),
+  params: $("params"),
+  runBtn: $("run-btn"),
+  runStatus: $("run-status"),
+  runStatusText: $("run-status-text"),
+  runSecs: $("run-secs"),
+  results: $("results"),
+  explainer: $("explainer"),
+  backendBadge: $("backend-badge"),
+  legend: $("legend"),
+  legendToggle: $("legend-toggle"),
+  legendArrow: $("legend-arrow"),
+  langBtn: $("lang-btn"),
+  cityList: $("city-list"),
+  cityInfo: $("city-info"),
+  attribution: $("attribution"),
 };
 
-let client;
-let infoData;
-let scene;
-let levelsById = {};
-let lastResult = null;
+// Dev-only escape hatch to test the timeout path quickly (?timeout_ms=3000).
+// Honoured only on the local mock (no Qollab backend): never on Qollab.
+const IS_LOCAL = typeof backend === "undefined";
+const query = new URLSearchParams(IS_LOCAL ? (globalThis.location?.search ?? "") : "");
+const timeoutOverride = Number(query.get("timeout_ms"));
+const bridge = createBridge(api, { timeoutMs: IS_LOCAL && timeoutOverride > 0 ? timeoutOverride : DEFAULT_TIMEOUT_MS });
 
-// A qué enlace geográfico asociamos cada nivel por defecto (para animar/enfocar).
+let infoData = null;
+let scene = null;
+let levelsById = {};
+let shown = null; // { levelId, result } currently rendered
+let selectedCity = null;
+let status = { state: "ready", secs: 0 };
+
+// Which geographic link each level animates by default.
 const LEVEL_LINK = {
   link: "BOG-MED",
   teleport: "BOG-MED",
@@ -51,140 +67,142 @@ const LEVEL_LINK = {
   rescue: "BOG-CAL",
 };
 
-async function boot() {
-  client = await createClient();
-  els.backendBadge.textContent = `backend: ${client.backendName()}`;
+// --- status (text + icon, never colour alone) --------------------------------
+const STATE_ICON = { ready: "○", running: "⏳", success: "✔", failed: "✖", recorded: "▣" };
 
-  infoData = await client.info();
-  if (!infoData || infoData.ok === false) {
-    hideLoader();
-    els.results.innerHTML = `<div class="results__error">No se pudo cargar info(): ${infoData?.error ?? "desconocido"}</div>`;
-    return;
-  }
-
-  // Escena 3D desde la geografía real.
-  scene = new NetworkScene(els.scene, els.labels);
-  scene.buildFromGeo(infoData.geo);
-  scene.onHover(onHover);
-
-  // Selector de niveles.
-  for (const lvl of infoData.levels) {
-    levelsById[lvl.id] = lvl;
-    const opt = document.createElement("option");
-    opt.value = lvl.id;
-    opt.textContent = lvl.title;
-    els.levelSelect.appendChild(opt);
-  }
-  els.levelSelect.addEventListener("change", () => selectLevel(els.levelSelect.value));
-  els.runBtn.addEventListener("click", run);
-  els.legendToggle.addEventListener("click", toggleLegend);
-
-  selectLevel(infoData.levels[0].id);
-
-  // Dar un frame para que el terreno aparezca y luego quitar el loader.
-  requestAnimationFrame(() => setTimeout(hideLoader, 350));
-
-  // Gancho de diagnóstico (inofensivo): permite inspeccionar el estado desde
-  // pruebas o la consola del navegador.
-  window.__ETA__ = {
-    mode: client.mode,
-    cities: Object.keys(scene.cities),
-    links: Object.keys(scene.links),
-    run,
-    get lastResult() {
-      return lastResult;
-    },
-  };
+function renderStatus() {
+  const { state, secs } = status;
+  els.runStatus.dataset.state = state;
+  els.runStatusText.textContent = `${STATE_ICON[state]} ${t(`status.${state}`)}`;
+  // The elapsed-seconds counter is visual only (aria-hidden): no announcement every second.
+  els.runSecs.textContent = state === "running" ? ` · ${secs} s` : "";
 }
 
-function selectLevel(id) {
-  const lvl = levelsById[id];
-  if (!lvl) return;
-  els.levelSummary.textContent = lvl.summary || "";
-  buildParamsForm(els.params, lvl);
-  renderExplainer(id, null);
-  const linkId = LEVEL_LINK[id];
-  if (linkId && scene) scene.focusLink(linkId);
+function setState(state, secs = 0) {
+  status = { state, secs };
+  renderStatus();
+  const busy = state === "running";
+  els.runBtn.disabled = busy;
+  els.levelSelect.disabled = busy;
+  els.results.setAttribute("aria-busy", String(busy));
 }
 
-async function run() {
-  const id = els.levelSelect.value;
-  const lvl = levelsById[id];
-  if (!lvl) return;
-
-  const params = readParams(els.params);
-  setBusy(true);
-  try {
-    const result = await client.runLevel(lvl.function, params);
-    lastResult = result;
-    renderResult(els.results, result);
-    renderExplainer(id, result);
-    updateScene(id, result);
-  } catch (err) {
-    renderResult(els.results, { ok: false, error: String(err?.message ?? err) });
-  } finally {
-    setBusy(false);
+// --- language ----------------------------------------------------------------
+function refreshLevelTexts() {
+  const lvl = levelsById[els.levelSelect.value];
+  for (const opt of els.levelSelect.options) {
+    const l = levelsById[opt.value];
+    opt.textContent = tOr(`level.${opt.value}.title`, l?.title ?? opt.value);
   }
+  els.levelSummary.textContent = lvl ? tOr(`level.${lvl.id}.summary`, lvl.summary || "") : "";
 }
 
-// Panel "¿Qué estoy viendo?": explicación antes + lectura del resultado.
+function renderBackendBadge() {
+  els.backendBadge.textContent = t("badge.backend", { name: bridge.backendName() });
+}
+
+function renderAttribution() {
+  // Official text; info().attribution wins when present (it is the same sentence).
+  els.attribution.textContent = infoData?.attribution || t("footer.attribution");
+  els.attribution.removeAttribute("data-i18n"); // keep it verbatim in both languages
+}
+
+els.langBtn.addEventListener("click", () => setLang(getLang() === "en" ? "es" : "en"));
+els.legendToggle.addEventListener("click", () => {
+  const collapsed = els.legend.classList.toggle("collapsed");
+  els.legendToggle.setAttribute("aria-expanded", String(!collapsed));
+  els.legendArrow.textContent = collapsed ? "▸" : "▾";
+});
+
+onLangChange((lang) => {
+  els.langBtn.lang = lang === "en" ? "es" : "en"; // the button shows the OTHER language's name
+  refreshLevelTexts();
+  renderBackendBadge();
+  renderStatus();
+  renderCityInfo();
+  // Text only: do not touch the 3D scene (no camera move, no photons re-emitted).
+  if (shown) renderShownText();
+  else renderExplainer(els.levelSelect.value, null);
+});
+
+// --- explainer ---------------------------------------------------------------
 function renderExplainer(levelId, result) {
-  const info = LEVEL_EXPLAIN[levelId];
-  if (!info) {
-    els.explainer.innerHTML = "";
-    return;
-  }
-  let html = `<p class="explainer__title">¿Qué estoy viendo? · ${info.title}</p>`;
-  html += `<div class="explainer__body">${info.before}`;
-  if (result && result.ok !== false && typeof info.after === "function") {
-    const line = info.after(result);
-    if (line) html += `<br><br>${line}`;
-  }
-  html += `</div>`;
-  els.explainer.innerHTML = html;
-}
-
-function updateScene(levelId, result) {
-  if (!result || result.ok === false || !scene) return;
-  const viz = result.viz || {};
-  scene.setLinkStates(viz.links);
-
-  const geoLinkIds = Object.keys(scene.links);
-  const samples = viz.samples;
-
-  // Caso rescue: samples es un dict por estrategia. Mostramos la estrategia
-  // recomendada sobre el enlace roto.
-  if (levelId === "rescue" && samples && typeof samples === "object" && viz.broken) {
-    const rec = viz.recommendation?.strategy;
-    const serie = (rec && samples[rec]) || Object.values(samples)[0];
-    if (serie) {
-      scene.emitPhotons(viz.broken, serie);
-      scene.highlightLink(viz.broken);
-      scene.focusLink(viz.broken);
+  els.explainer.replaceChildren();
+  if (!hasExplain(levelId)) return;
+  const title = document.createElement("p");
+  title.className = "explainer__title";
+  title.textContent = `${t("ex.prefix")} · ${explainTitle(levelId)}`;
+  const body = document.createElement("div");
+  body.className = "explainer__body";
+  body.innerHTML = explainBefore(levelId); // our own dictionary markup
+  if (result) {
+    const line = explainAfter(levelId, result);
+    if (line) {
+      body.appendChild(document.createElement("br"));
+      body.appendChild(document.createElement("br"));
+      if (typeof line === "string") {
+        const span = document.createElement("span");
+        span.innerHTML = line; // dictionary text + formatted numbers only
+        body.appendChild(span);
+      } else {
+        const b = document.createElement("b");
+        b.textContent = line.text; // backend text: textContent
+        body.appendChild(b);
+      }
     }
-    return;
   }
+  els.explainer.append(title, body);
+}
 
-  if (Array.isArray(samples)) {
-    const target = pickTargetLink(levelId, viz) || LEVEL_LINK[levelId] || geoLinkIds[0];
-    scene.emitPhotons(target, samples);
-    scene.highlightLink(target);
-    scene.focusLink(target);
-  } else if (samples && typeof samples === "object") {
-    // noise: dict por F -> repartir las series entre los enlaces geográficos.
-    const series = Object.values(samples);
-    geoLinkIds.forEach((lid, i) => {
-      if (series[i]) scene.emitPhotons(lid, series[i]);
+// --- cities (keyboard access in addition to 3D hover) ------------------------
+function cityRows(data) {
+  const info = cityTooltip(data);
+  const frag = document.createDocumentFragment();
+  const title = document.createElement("div");
+  title.className = "tooltip__title";
+  title.textContent = info.title;
+  frag.appendChild(title);
+  for (const r of info.rows) {
+    const row = document.createElement("div");
+    row.className = "tooltip__row";
+    row.textContent = r;
+    frag.appendChild(row);
+  }
+  return frag;
+}
+
+function renderCityInfo() {
+  const data = selectedCity && infoData?.geo?.cities?.[selectedCity];
+  els.cityInfo.replaceChildren();
+  if (data) {
+    els.cityInfo.appendChild(cityRows(data));
+  } else {
+    const hint = document.createElement("span");
+    hint.className = "city-info__hint";
+    hint.dataset.i18n = "cities.hint";
+    hint.textContent = t("cities.hint");
+    els.cityInfo.appendChild(hint);
+  }
+}
+
+function buildCityList(cities) {
+  els.cityList.replaceChildren();
+  for (const [id, c] of Object.entries(cities)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "city-btn" + (c.challenge ? " city-btn--challenge" : "");
+    b.textContent = c.name;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => {
+      selectedCity = id;
+      for (const o of els.cityList.children) o.setAttribute("aria-pressed", String(o === b));
+      renderCityInfo();
+      scene?.focusCity(id);
     });
+    els.cityList.appendChild(b);
   }
 }
 
-function pickTargetLink(levelId, viz) {
-  if (levelId === "rescue" && viz.broken) return viz.broken;
-  return null;
-}
-
-// Hover sobre una ciudad -> tooltip.
 function onHover(hovered) {
   if (!hovered) {
     els.tooltip.hidden = true;
@@ -192,10 +210,7 @@ function onHover(hovered) {
     return;
   }
   if (hovered.type === "city") {
-    const t = cityTooltip(hovered.data);
-    els.tooltip.innerHTML =
-      `<div class="tooltip__title">${t.title}</div>` +
-      t.rows.map((r) => `<div class="tooltip__row">${r}</div>`).join("");
+    els.tooltip.replaceChildren(cityRows(hovered.data));
     els.tooltip.hidden = false;
     els.tooltip.style.left = `${hovered.client.x}px`;
     els.tooltip.style.top = `${hovered.client.y}px`;
@@ -203,23 +218,242 @@ function onHover(hovered) {
   }
 }
 
-function toggleLegend() {
-  const collapsed = els.legend.classList.toggle("collapsed");
-  els.legendToggle.setAttribute("aria-expanded", String(!collapsed));
-  els.legendToggle.textContent = collapsed ? "Leyenda ▸" : "Leyenda ▾";
+// --- levels / run --------------------------------------------------------------
+function selectLevel(id) {
+  const lvl = levelsById[id];
+  if (!lvl) return;
+  refreshLevelTexts();
+  buildParamsForm(els.params, lvl, { ionq: /ionq/i.test(bridge.backendName()) });
+  applyI18n(els.params);
+  shown = null;
+  els.results.replaceChildren();
+  const empty = document.createElement("p");
+  empty.className = "results__empty";
+  empty.dataset.i18n = "results.empty";
+  empty.textContent = t("results.empty");
+  els.results.appendChild(empty);
+  renderExplainer(id, null);
+  const linkId = LEVEL_LINK[id];
+  if (linkId && scene) scene.focusLink(linkId);
 }
 
-function setBusy(busy) {
-  els.runBtn.disabled = busy;
-  els.runStatus.textContent = busy ? "ejecutando…" : "";
+// Wait one frame so "Running" paints; fall back to a timer if rAF does not fire (hidden tab).
+const nextFrame = () =>
+  new Promise((resolve) => {
+    let done = false;
+    const go = () => {
+      if (!done) {
+        done = true;
+        resolve();
+      }
+    };
+    requestAnimationFrame(() => setTimeout(go, 0));
+    setTimeout(go, 50);
+  });
+
+async function run() {
+  const levelId = els.levelSelect.value;
+  if (!levelsById[levelId]) return;
+  const params = readParams(els.params);
+  setState("running", 0);
+  // Local simulators block the main thread: paint "Running" before Python starts.
+  await nextFrame();
+  let result;
+  try {
+    result = await bridge.runLevel(levelId, params, {
+      onState: (s) => (s === "running" ? setState("running", status.secs) : setState(s)),
+      onTick: (secs) => setState("running", secs),
+    });
+  } catch (err) {
+    result = { ok: false, error: String(err?.message ?? err) };
+  }
+  if (result === null || result === undefined) {
+    // Stale (a newer request replaced it) or ignored (busy): do not paint anything.
+    if (status.state === "running") setState("ready");
+    return;
+  }
+  if (result.code === "previous_pending") {
+    // Nothing ran: keep what is on screen and just explain.
+    setState("ready");
+    renderResult(els.results, result);
+    return;
+  }
+  // A failed live call that still shows a recorded result is not a failure for the user.
+  const hasRecorded = result.ok === false && !!result.fallback?.result;
+  setState(result.ok === false && !hasRecorded ? "failed" : hasRecorded ? "recorded" : "success");
+  shown = { levelId, result };
+  renderShown();
+}
+
+// What to draw: the result, or the recorded fallback of a failed call.
+function visibleResult(result) {
+  return result?.ok === false ? (result.fallback?.result ?? null) : result;
+}
+
+// Text panels only (results, link-status card, explainer): safe to redo on a language change.
+function renderShownText() {
+  const { levelId, result } = shown;
+  renderResult(els.results, result);
+  const vis = visibleResult(result);
+  const ls = linkStatusOf(levelId, vis);
+  if (ls) els.results.appendChild(linkStatusCard(ls));
+  renderExplainer(levelId, vis);
+}
+
+function renderShown() {
+  const { levelId, result } = shown;
+  updateScene(levelId, visibleResult(result));
+  renderShownText();
+}
+
+// --- scene ---------------------------------------------------------------------
+function linkLabel(linkId) {
+  const l = infoData?.geo?.links?.find((x) => x.id === linkId);
+  const cities = infoData?.geo?.cities ?? {};
+  return l ? `${cities[l.a]?.name ?? l.a}–${cities[l.b]?.name ?? l.b}` : linkId;
+}
+
+// {F, status} for the level's own link, from the level's fidelity metric.
+function levelFidelity(levelId, r) {
+  const m = r?.metrics ?? {};
+  if (levelId === "qkd") {
+    const s = m.chsh_standard?.value;
+    if (typeof s !== "number") return null;
+    // No fidelity metric in this level: S/(2*sqrt(2)) is the fidelity-equivalent of the
+    // spy model; S <= 2 means the Bell violation (and the link) is lost.
+    return { F: Math.min(1, s / (2 * Math.SQRT2)), status: s > 2 ? undefined : "broken" };
+  }
+  const v = (levelId === "purify" ? (m.fidelity_adaptive ?? m.fidelity_fixed) : m.fidelity)?.value;
+  return typeof v === "number" ? { F: v } : null;
+}
+
+// Status card info {label, F, status} for the level's main link (pure, no scene access).
+function linkStatusOf(levelId, r) {
+  if (!r || levelId === "noise") return null;
+  if (levelId === "rescue") {
+    const broken = r.params?.broken;
+    const st = broken && r.viz?.links?.[broken];
+    return st ? { label: linkLabel(broken), F: st.F, status: st.status ?? classifyFidelity(st.F) } : null;
+  }
+  const lf = levelFidelity(levelId, r);
+  const target = LEVEL_LINK[levelId];
+  return lf ? { label: linkLabel(target), F: lf.F, status: lf.status ?? classifyFidelity(lf.F) } : null;
+}
+
+// Paints the 3D scene (links, photons, camera). Only called after a run, never on a language change.
+function updateScene(levelId, r) {
+  if (!scene) return;
+  scene.clearPhotons();
+  scene.resetLinks();
+  if (!r) return;
+  const viz = r.viz || {};
+  const samples = viz.samples;
+  const geoLinkIds = Object.keys(scene.links);
+
+  if (levelId === "rescue") {
+    const broken = r.params?.broken; // there is no viz.broken
+    scene.setLinkStates(viz.links); // viz.links has geo ids here
+    if (broken && scene.links[broken]) {
+      const rec = viz.recommendation?.strategy;
+      const serie = (rec && samples?.[rec]?.length ? samples[rec] : null) ?? Object.values(samples || {}).find((s) => s?.length);
+      if (serie) scene.emitPhotons(broken, serie);
+      scene.highlightLink(broken);
+      scene.focusLink(broken);
+    }
+    return;
+  }
+
+  if (levelId === "noise" && viz.links && samples && !Array.isArray(samples)) {
+    // One series per configured F: spread them over the geographic links.
+    Object.entries(viz.links).forEach(([key, st], i) => {
+      const lid = geoLinkIds[i];
+      if (!lid) return;
+      scene.setLinkStates({ [lid]: { F: st.F } });
+      if (samples[key]) scene.emitPhotons(lid, samples[key]);
+    });
+    return;
+  }
+
+  const target = LEVEL_LINK[levelId] || geoLinkIds[0];
+  const lf = levelFidelity(levelId, r);
+  if (lf) scene.setLinkStates({ [target]: { F: lf.F, status: lf.status } });
+  if (Array.isArray(samples)) scene.emitPhotons(target, samples);
+  scene.highlightLink(target);
+  scene.focusLink(target);
 }
 
 function hideLoader() {
   els.loader?.classList.add("hidden");
 }
 
-boot().catch((err) => {
-  hideLoader();
-  els.results.innerHTML = `<div class="results__error">Fallo al iniciar: ${err?.message ?? err}</div>`;
+function showFatal(message) {
+  els.results.replaceChildren();
+  const box = document.createElement("div");
+  box.className = "results__error";
+  box.textContent = `✖ ${message}`;
+  els.results.appendChild(box);
+}
+
+// --- boot ----------------------------------------------------------------------
+async function boot() {
+  applyI18n(document);
+  renderBackendBadge();
+  setState("ready");
+  els.runBtn.disabled = true;
+
+  infoData = await bridge.info();
+  if (!infoData || infoData.ok === false) {
+    hideLoader();
+    setState("failed");
+    showFatal(`info(): ${infoData?.error ?? "unknown error"}`);
+    return;
+  }
+  renderAttribution();
+
+  try {
+    scene = new NetworkScene(els.scene, els.labels);
+    scene.buildFromGeo(infoData.geo);
+    scene.onHover(onHover);
+  } catch (err) {
+    // No WebGL (or three failed): the panels still work without the 3D view.
+    console.error(err);
+    scene = null;
+  }
+  buildCityList(infoData.geo.cities);
+
+  for (const lvl of infoData.levels) {
+    levelsById[lvl.id] = lvl;
+    const opt = document.createElement("option");
+    opt.value = lvl.id;
+    opt.textContent = tOr(`level.${lvl.id}.title`, lvl.title);
+    els.levelSelect.appendChild(opt);
+  }
+  els.levelSelect.addEventListener("change", () => selectLevel(els.levelSelect.value));
+  els.runBtn.addEventListener("click", run);
+  selectLevel(infoData.levels[0].id);
+  setState("ready");
+
+  requestAnimationFrame(() => setTimeout(hideLoader, 350));
+
+  // Harmless diagnostics hook (console / tests).
+  window.__ETA__ = {
+    cities: scene ? Object.keys(scene.cities) : [],
+    links: scene ? Object.keys(scene.links) : [],
+    run,
+    get shown() {
+      return shown;
+    },
+  };
+}
+
+try {
+  await boot();
+} catch (err) {
   console.error(err);
-});
+  hideLoader();
+  setState("failed");
+  showFatal(`Startup failed: ${err?.message ?? err}`);
+}
+
+// Keep the Qollab run alive so clicks can still reach IonQ (Stop ends it). Must stay the LAST line.
+await new Promise(() => {});

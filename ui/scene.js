@@ -43,13 +43,19 @@ const TERRAIN_SPAN = WORLD * 2.6;
 const SEG = 180;            // resolución de la malla del terreno (balance calidad/fps)
 const HEIGHT_SCALE = 0.42;  // km -> unidades de escena
 
+// Same thresholds as the legend: healthy F >= 0.9, degraded 0.6-0.9, broken below.
+export function classifyFidelity(F) {
+  if (F == null) return "healthy";
+  if (F >= 0.9) return "healthy";
+  if (F >= 0.6) return "degraded";
+  return "broken";
+}
+
 function fidelityColor(F, status) {
   if (status === "broken" || status === "damaged") return COLORS.linkBroken;
   if (status === "rescued") return COLORS.linkRescued;
-  if (F == null) return COLORS.linkHealthy;
-  if (F >= 0.9) return COLORS.linkHealthy;
-  if (F >= 0.6) return COLORS.linkDegraded;
-  return COLORS.linkBroken;
+  const c = classifyFidelity(F);
+  return c === "healthy" ? COLORS.linkHealthy : c === "degraded" ? COLORS.linkDegraded : COLORS.linkBroken;
 }
 
 // Altura de escena en (x,z) a partir del heightmap procedural.
@@ -72,6 +78,14 @@ export class NetworkScene {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.hoverHandlers = [];
+
+    // prefers-reduced-motion: static render (no photon flow, waves, pulses or auto-rotation).
+    this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    this.reducedMotion = !!this._motionQuery?.matches;
+    this._motionQuery?.addEventListener?.("change", (e) => {
+      this.reducedMotion = e.matches;
+      if (e.matches) this.controls.autoRotate = false;
+    });
 
     this._initRenderer();
     this._initScene();
@@ -121,7 +135,7 @@ export class NetworkScene {
     this.controls.maxDistance = 30;
     this.controls.maxPolarAngle = Math.PI / 2.05;
     this.controls.target.set(0, 0.4, 0);
-    this.controls.autoRotate = true;
+    this.controls.autoRotate = !this.reducedMotion;
     this.controls.autoRotateSpeed = 0.25;
     // Al interactuar, se detiene la rotación automática.
     this.controls.addEventListener("start", () => (this.controls.autoRotate = false));
@@ -559,6 +573,34 @@ export class NetworkScene {
     link.photons = { mesh, data, curve: link.curve };
   }
 
+  // Back to the neutral state before drawing a new result.
+  resetLinks() {
+    for (const link of Object.values(this.links)) {
+      link.uniforms.color.value.setHex(COLORS.linkHealthy);
+      link.uniforms.intensity.value = 1.0;
+      link.uniforms.flow.value = 1.0;
+      link.F = null;
+      link.status = "healthy";
+    }
+  }
+
+  clearPhotons() {
+    for (const link of Object.values(this.links)) {
+      if (!link.photons) continue;
+      this.scene.remove(link.photons.mesh);
+      link.photons.mesh.geometry.dispose();
+      link.photons.mesh.material.dispose();
+      link.photons = null;
+    }
+  }
+
+  // Keyboard / list access: look at a city.
+  focusCity(cityId) {
+    const c = this.cities[cityId];
+    if (!c) return;
+    this.controls.target.lerp(c.pos, 0.6);
+  }
+
   highlightLink(linkId) {
     this.activeLink = linkId;
   }
@@ -612,8 +654,10 @@ export class NetworkScene {
 
   _animate = () => {
     this._raf = requestAnimationFrame(this._animate);
-    const dt = this.clock.getDelta();
-    const t = this.clock.elapsedTime;
+    const delta = this.clock.getDelta();
+    // Reduced motion: time stands still, so everything is a static frame.
+    const dt = this.reducedMotion ? 0 : delta;
+    const t = this.reducedMotion ? 0 : this.clock.elapsedTime;
 
     if (this.seaUniforms) this.seaUniforms.time.value = t;
 

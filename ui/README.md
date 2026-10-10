@@ -1,28 +1,56 @@
 # Web 3D — Entangle the Andes
 
-Tablero interactivo en 3D de la red cuántica Bogotá – Medellín – Cali. Se
-construye sobre [three.js](https://threejs.org) (MIT) y habla con la física del
-proyecto a través de `quantum/api.py`.
+Tablero interactivo en 3D de la red cuántica Bogotá – Medellín – Cali, sobre
+[three.js](https://threejs.org) (MIT). Habla con la física del proyecto a través de
+`quantum/api.py`. Interfaz **bilingüe EN/ES** (inglés por defecto; el botón de idioma
+no guarda nada: Qollab no tiene almacenamiento).
 
-## Qué hay aquí
+## Estructura
 
 ```
-index.html        # raíz: hace que Qollab trate el proyecto como JS. Import map de three.js.
-main.css          # tema "noche andina": loader, paneles glass, leyenda, tooltip, métricas
-main.js           # orquestador (idéntico en local y en Qollab)
+index.html        # SOLO contenido de <body> (fuente de verdad del marcado). Sin html/head/script/importmap/link.
+main.css          # única hoja de estilos (Qollab solo carga esta)
+main.js           # orquestador; import ESTÁTICO de 'quantum.api'; última línea = keep-alive IonQ
 ui/
-  api-bridge.js   # capa de datos: Qollab (api real) vs local (mock)
-  mock-data.js    # mock para desarrollo local (espejo de geo.py + viz/metrics)
-  colombia-geo.js # contorno real de Colombia + relieve procedural (Andes, mar)
-  scene.js        # escena three.js de alta calidad (terreno, ciudades, enlaces, fotones, bloom)
-  panel.js        # formulario de parámetros (data-driven desde info()) y métricas
-  explain.js      # textos educativos por nivel + tooltips (capa "¿Qué estoy viendo?")
+  api-bridge.js   # callApi (busy, id anti-resultados viejos, timeout 180 s, load_recorded) + runLevel
+  mock-api.js     # SOLO local: imita el módulo Python quantum.api (info, run_level, load_recorded...)
+  mock-data.js    # datos del mock con la forma ACTUAL de los resultados (no son mediciones)
+  i18n.js         # diccionarios EN/ES, t(), applyI18n(), setLang()
+  explain.js      # capa educativa ("¿Qué estoy viendo?") sobre i18n
+  panel.js        # formulario desde info() y render de resultados / errores / recorded
+  scene.js        # escena three.js (terreno, ciudades, enlaces, fotones, bloom)
+  colombia-geo.js # contorno de Colombia + relieve procedural
+dev/index.html    # SOLO local (no se sube): página completa con import map; GENERADA
+tools/make_dev_html.sh   # regenera dev/index.html desde index.html
+tools/build_qollab.sh    # empaqueta dist/qollab_app.zip para Qollab
 ```
+
+`index.html` (raíz) es la fuente de verdad del marcado. Tras editarlo, ejecuta
+`tools/make_dev_html.sh`; no edites `dev/index.html` a mano.
+
+## Cómo habla con Python (igual en local y en Qollab)
+
+- `main.js` hace `import * as api from 'quantum.api'` (estático: el import dinámico
+  falla en Qollab). Localmente el import map de `dev/index.html` apunta ese nombre a
+  `ui/mock-api.js`, así que el bridge es idéntico en ambos sitios.
+- **Todos** los niveles pasan por `api.run_level.callPromising(backend, nivel, params)`
+  (posicional; `backend` es un global que crea Qollab; niveles: link, teleport, noise,
+  swap, purify, qkd, rescue). `full_batch` y `level_*` no se usan.
+- En IonQ **1 Run = 1 nivel** (un circuito empaquetado). Pedir otro nivel en el mismo Run
+  devuelve `ionq_job_used` + `fallback` grabado: la UI lo dibuja con la etiqueta visible
+  "Recorded · backend · fecha" y dice "Stop → Run". `ionq_too_wide` muestra qubits
+  necesarios vs máximos; `input_error` solo muestra el error.
+- **Keep-alive**: la última línea de `main.js` es `await new Promise(() => {})`. Qollab solo
+  deja enviar trabajos a IonQ mientras el código de nivel superior sigue pendiente. Stop
+  sigue terminando el Run. No pongas nada después de esa línea.
+- Los parámetros opcionales (`default: null`) tienen estado "apagado" y no se envían:
+  purify manda exactamente uno de gamma / F / p; qkd manda F solo con θ = 0 y nunca en IonQ.
+- Todo texto que viene del backend (nombre, errores, notas, explicaciones) se inserta con
+  `textContent`.
 
 ## Tecnologías visuales
 
-Todo se carga por import map desde el CDN de three.js (sin bundler, sin assets
-binarios), así que es portable al iframe de Qollab:
+Sin bundler ni assets binarios. En Qollab, `three` y `three/addons/...` (three.js 0.186.1) se importan por nombre; en local, `dev/index.html` los mapea al CDN (jsdelivr):
 
 - **three.js** con `WebGLRenderer` en ACES Filmic + sRGB y sombras suaves.
 - **Postprocesado** (`EffectComposer` + `UnrealBloomPass` + `OutputPass`): todo
@@ -43,7 +71,7 @@ binarios), así que es portable al iframe de Qollab:
 
 ## Capa educativa (qué es cada cosa)
 
-- **Leyenda** permanente (abajo a la izquierda, colapsable): explica las bolas
+- **Leyenda** permanente (abajo al centro, colapsable): explica las bolas
   azul/cian (paridad 0, resultado igual, sano) y naranja (paridad 1, error), los
   colores de enlace (sano/degradado/roto/rescatado) y las ciudades.
 - **Tooltips** al pasar el ratón sobre una ciudad (nodo QPU).
@@ -53,55 +81,45 @@ binarios), así que es portable al iframe de Qollab:
 
 ## Desarrollo local
 
-No necesita Qollab ni Qiskit. Un servidor estático basta porque todo son
-módulos ES nativos:
+No necesita Qollab ni Qiskit; solo un servidor estático (todo son módulos ES nativos) y
+acceso a jsdelivr para three.js y a Google Fonts (si las fuentes no cargan, se usa la
+tipografía del sistema):
 
 ```bash
-# desde la raíz del repo
-python3 -m http.server 8123
-# abrir http://localhost:8123
+tools/make_dev_html.sh            # si cambiaste index.html
+python3 -m http.server 8123       # desde la raíz del repo
+# abrir http://localhost:8123/dev/index.html
 ```
 
-En local, `api-bridge.js` detecta que no existe el global `backend` ni el
-módulo Python `quantum.api`, así que usa `ui/mock-data.js`. El mock devuelve
-objetos con **la misma forma** del contrato JSON del backend (`metrics`, `viz`,
-`counts`...), con números plausibles derivados de las mismas fórmulas de la
-física — útiles para ver la UI, **no** son mediciones.
+Interruptores de prueba (query string; ver `ui/mock-api.js`):
 
-El badge `backend: local_mock` indica que estás en modo mock.
+- `?mock=ionq` simula IonQ: el primer nivel va como `ionq_packed`; repetirlo sale de la
+  caché (`cached_run`); otro nivel da `ionq_job_used` + recorded; rescue sale reducido.
+- `?mock=aria` igual, pero purify da `ionq_too_wide` (27 > 25 qubits).
+- `?mock=hang&timeout_ms=3000` la llamada nunca responde: prueba el timeout y el recorded.
+
+El badge `backend: local_mock` indica el mock. Los números del mock son plausibles, **no**
+mediciones.
 
 ## Subir a Qollab
 
-1. Sube el repo completo (incluye `quantum/` y estos archivos de la raíz).
-2. Como `index.html` y `main.js` están en la raíz, Qollab lo trata como
-   **proyecto JS** automáticamente (ver *The runtime environment* en los docs).
-3. Elige un simulador o QPU en **Select QPU** y pulsa **Run**.
+```bash
+tools/build_qollab.sh      # -> dist/qollab_app/ y dist/qollab_app.zip
+```
 
-En Qollab, `api-bridge.js` detecta el global `backend` inyectado por el runtime
-e importa `quantum.api`, llamando a las funciones Python con
-`callPromisingKwargs({...})` y desenvolviendo el resultado con `.toJs()`.
+Sube el contenido del zip (`index.html`, `main.js`, `main.css`, `ui/`, `quantum/`, `data/`,
+`requirements.txt`, `README.md`, `LICENSE`; sin `dev/`). Elige un simulador o QPU en
+**Select QPU** y pulsa **Run**. Para un segundo nivel en IonQ: Stop y Run de nuevo.
 
-### IonQ: un solo job por run
+## Accesibilidad
 
-Los backends IonQ aceptan **un** `backend.run` por ejecución. Los niveles
-sueltos (`level_*`) se niegan con el código `ionq_use_full_batch`. El bridge lo
-maneja: cuando el backend es IonQ y pides un nivel suelto, redirige a
-`full_batch` (un solo job con todos los circuitos) y extrae el nivel pedido.
-`rescue` ya es un solo job y se permite directamente.
-
-> Limitación conocida: el formulario de `purify` expone `F` y `gamma` como
-> controles separados. En el camino IonQ→`full_batch`, el backend exige
-> exactamente uno de `F`/`gamma`/`p`. Para IonQ, deja solo uno con valor.
-
-## Portabilidad del import map
-
-`index.html` carga three.js desde `unpkg.com` con un `<script type="importmap">`.
-Esto funciona en el navegador local y en el iframe de Qollab. Si el sandbox de
-Qollab bloqueara el CDN, descarga `three.module.js` y `examples/jsm/` a
-`ui/vendor/` y apunta el import map a esas rutas relativas.
+Foco visible (`:focus-visible`), `aria-live` en estado y resultados, ciudades también como
+botones de teclado (además del hover 3D), estados con texto e icono (no solo color),
+controles con etiqueta, contraste AA y `prefers-reduced-motion` (render estático: sin
+fotones en movimiento, olas, pulsos ni giro automático).
 
 ## La IA en este proyecto
 
-La IA se usó **solo en tiempo de desarrollo** (construir y revisar el código).
-La web es autocontenida: no llama a ningún modelo en runtime, no necesita API
-keys ni hace peticiones externas más allá del CDN de three.js.
+La IA se usó **solo en tiempo de desarrollo** (construir y revisar el código). La web no
+llama a ningún modelo en runtime ni necesita API keys; las únicas peticiones externas son
+GET de fuentes (Google Fonts) y, solo en `dev/`, el CDN de three.js.

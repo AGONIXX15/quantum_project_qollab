@@ -16,7 +16,14 @@ Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Be
   were written during the build window (see commit history).
 - We used Claude Code to help research, write, review and test the code and
   documentation. The team reviewed and tested every change.
-- Libraries: Qiskit, qiskit-ionq (Apache 2.0), three.js (MIT).
+- Libraries: Qiskit, qiskit-ionq (Apache 2.0), [three.js](https://threejs.org) (MIT, 3D map and bloom
+  post-processing; provided by the Qollab runtime, loaded by bare name, not copied into this repo).
+- Related prior work (not reused, no code or assets taken): QuTech's
+  [Quantum Network Explorer](https://qutech.nl/2021/11/19/new-platform-opens-quantum-networking-to-everyone/)
+  also opens quantum networking to everyone. We differ in that every link here is a real Qiskit circuit that
+  runs on IonQ (and simulators) with 95 % confidence intervals and theory comparisons, whereas the Explorer is
+  built on the NetSquid network simulator; and in our "noise is someone listening" explainer, which treats
+  noise and an eavesdropper as the same mechanism.
 
 ## References & credits
 

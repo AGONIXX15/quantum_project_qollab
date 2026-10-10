@@ -1,134 +1,155 @@
 /*
-  Capa de datos: una sola API para la UI, que funciona igual en Qollab y en local.
+  Data layer: ONE code path for Qollab and for the local dev page.
 
-  En Qollab el runtime inyecta:
-    - `backend` (global, elegido en "Select QPU")
-    - los módulos Python importables por su nombre con puntos, p.ej. 'quantum.api'
-  Las funciones Python se llaman con `.callPromisingKwargs({...})` y el resultado
-  se desenvuelve con `.toJs()`.
-
-  En local no existe ni `backend` ni el puente Pyodide, así que usamos un mock
-  (ui/mock-data.js) que devuelve objetos con EXACTAMENTE la misma forma del
-  contrato JSON del backend. Así `main.js` nunca distingue un modo del otro.
-
-  IMPORTANTE: IonQ permite un solo job por run. La UI debe preferir `full_batch`
-  (un solo backend.run) sobre los niveles sueltos cuando el backend es IonQ.
+  - `api` is the namespace module `import * as api from 'quantum.api'` done
+    STATICALLY in main.js (the only form Qollab resolves; dynamic import fails).
+    Locally the import map points 'quantum.api' to ui/mock-api.js, which exposes
+    the same functions, so nothing here knows which one it is talking to.
+  - `backend` is a global created by Qollab (never created here). Calls are
+    positional: fn.callPromising(backend, ...args).
+  - Every level runs through api.run_level(backend, level, params), on every
+    backend (on IonQ: 1 Run = 1 level = 1 packed circuit).
+  - callApi follows docs/integracion_ui.md: busy flag, stale-request id,
+    180 s timeout via Promise.race, recorded fallback on timeout, and it never
+    leaves the UI in "running" after an error.
 */
 
-import { makeMock } from "./mock-data.js";
+export const DEFAULT_TIMEOUT_MS = 180000;
 
-// Mapa función de API -> id de nivel (para redirigir a full_batch en IonQ).
-const FN_TO_LEVEL = {
-  level_link: "link",
-  level_teleport: "teleport",
-  level_noise: "noise",
-  level_swap: "swap",
-  level_purify: "purify",
-  level_qkd: "qkd",
+const plain = (p) => {
+  try {
+    return p && typeof p.toJs === "function" ? p.toJs({ dict_converter: Object.fromEntries }) : p;
+  } finally {
+    p?.destroy?.();
+  }
 };
 
-// full_batch toma `shots` a nivel global, no por nivel: lo quitamos del dict
-// de parámetros del nivel para no mandar una clave desconocida.
-function stripShots(params) {
-  const { shots, ...rest } = params || {};
-  return rest;
+// Qollab's global `backend` (undefined on the local dev page).
+function backendRef() {
+  return typeof backend === "undefined" ? undefined : backend;
 }
 
-// ¿Estamos dentro de Qollab? Heurística: existe el global `backend` y podemos
-// importar dinámicamente el módulo Python 'quantum.api'. Si algo falla, local.
-async function detectQollab() {
+export function backendName() {
+  const b = backendRef();
+  if (!b) return "local_mock";
   try {
-    // `backend` es un global inyectado por Qollab en main.js y sus imports.
-    if (typeof backend === "undefined" || backend === null) return null;
-    // Import dinámico del módulo Python expuesto como módulo JS.
-    const api = await import("quantum.api");
-    if (api && (api.info || api.default)) return api;
-    return null;
+    const n = b.name;
+    return String(typeof n === "function" ? n.call(b) : (n ?? b.constructor?.name ?? "unknown"));
   } catch (_err) {
-    return null;
+    return "unavailable";
   }
 }
 
-// Convierte un resultado Python (JsProxy) a datos JS planos de forma segura.
-function unwrap(value) {
-  if (value && typeof value.toJs === "function") {
-    return value.toJs({ dict_converter: Object.fromEntries });
+// Recorded run (api.load_recorded) -> same shape as run_level's `fallback`.
+// IonQ recordings first, like the Python side. Returns null if none has the level.
+export function recordedToFallback(rec, level) {
+  const runs = [...(rec?.recorded ?? [])].sort(
+    (a, b) => Number(!String(a.name).toLowerCase().includes("ionq")) - Number(!String(b.name).toLowerCase().includes("ionq")),
+  );
+  for (const run of runs) {
+    const lv = run?.result?.levels?.[level];
+    if (lv && lv.ok) {
+      return {
+        source: "recorded",
+        file: run.name,
+        mode: "recorded",
+        backend: lv.backend ?? run.result.backend,
+        timestamp: lv.timestamp ?? run.result.timestamp,
+        result: lv,
+      };
+    }
   }
-  return value;
+  return null;
 }
 
-// Llama a una función Python por el puente de Qollab, con kwargs.
-async function callPy(fn, kwargs) {
-  // callPromisingKwargs: variante async + keyword args del puente Qollab.
-  const promise = fn.callPromisingKwargs(kwargs);
-  const result = await promise;
-  return unwrap(result);
-}
+export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  let lastId = 0;
+  let busy = false;
+  let latePending = false; // a call that timed out is still running in the background
 
-/**
- * Crea el cliente de datos. Devuelve un objeto con:
- *   - mode: "qollab" | "local"
- *   - backendName(): string
- *   - info(): Promise<infoDict>
- *   - runLevel(levelFn, params): Promise<resultDict>   (envelope ok:true/false)
- *   - fullBatch(params): Promise<resultDict>
- */
-export async function createClient() {
-  const api = await detectQollab();
+  // Race `call` against the timeout. A late proxy is destroyed when it finally settles.
+  function withTimeout(call) {
+    let timer;
+    let timedOut = false;
+    const timeout = new Promise((_, rej) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        rej(new Error("timeout"));
+      }, timeoutMs);
+    });
+    const done = Promise.race([call, timeout]).finally(() => clearTimeout(timer));
+    return { done, wasTimeout: () => timedOut };
+  }
 
-  if (api) {
-    // -------- Modo Qollab (puente real) --------
-    const name =
-      typeof backend?.name === "function" ? backend.name() : (backend?.name ?? "qollab");
-    const isIonq = String(name).toLowerCase().includes("ionq");
+  async function info() {
+    try {
+      const call = api.info.callPromising();
+      const { done, wasTimeout } = withTimeout(call);
+      try {
+        return plain(await done);
+      } catch (err) {
+        if (wasTimeout()) call.then((p) => p?.destroy?.(), () => {});
+        throw err;
+      }
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
 
-    return {
-      mode: "qollab",
-      isIonq,
-      backendName: () => String(name),
-      async info() {
-        return callPy(api.info, {});
-      },
-      async runLevel(fnName, params) {
-        const fn = api[fnName];
-        if (!fn) return { ok: false, error: `función desconocida: ${fnName}` };
-
-        // IonQ permite un solo job por run. Los niveles sueltos (level_*) se
-        // niegan con el código `ionq_use_full_batch`. `rescue` y `full_batch`
-        // sí son un solo job. Para que la demo funcione igual en IonQ,
-        // redirigimos un nivel suelto a full_batch y extraemos ese nivel.
-        const level = FN_TO_LEVEL[fnName];
-        if (isIonq && fnName.startsWith("level_") && level) {
-          const batch = await callPy(api.full_batch, {
-            backend,
-            params: { [level]: stripShots(params) },
-          });
-          if (batch?.ok === false) return batch;
-          const one = batch?.levels?.[level];
-          return one ?? { ok: false, error: `full_batch no devolvió el nivel ${level}` };
+  // fn.callPromising(backend, ...args) with busy/stale/timeout handling.
+  // Returns null when ignored (busy) or stale (a newer request replaced it).
+  async function callApi(fn, args, { onState, onTick } = {}) {
+    if (busy) return null; // buttons must also be disabled by the caller
+    if (latePending) {
+      // A previous call timed out but has not settled: do not start another (IonQ: one job per Run).
+      return { ok: false, code: "previous_pending", input_error: true, error: "Previous run still finishing…" };
+    }
+    busy = true;
+    const id = ++lastId;
+    const t0 = performance.now();
+    onState?.("running");
+    const tick = setInterval(() => onTick?.(Math.round((performance.now() - t0) / 1000)), 1000);
+    try {
+      const call = fn.callPromising(backendRef(), ...args); // positional
+      const { done, wasTimeout } = withTimeout(call);
+      try {
+        const res = plain(await done);
+        if (id !== lastId) return null; // stale: ignore
+        onState?.(res?.ok ? "success" : "failed");
+        return res; // !res.ok: show res.error and res.fallback (recorded)
+      } catch (err) {
+        const timedOut = wasTimeout();
+        if (timedOut) {
+          // Keep the late call tracked: no new run until it settles; destroy its proxy.
+          latePending = true;
+          call.then((p) => p?.destroy?.(), () => {}).finally(() => { latePending = false; });
         }
-        return callPy(fn, { backend, ...params });
-      },
-      async fullBatch(params) {
-        return callPy(api.full_batch, { backend, params });
-      },
-    };
+        if (id !== lastId) return null;
+        onState?.("failed");
+        if (!timedOut) return { ok: false, error: String(err) };
+        try {
+          const rec = plain(await api.load_recorded.callPromising());
+          if (id !== lastId) return null; // re-check after the await
+          return { ok: false, error: "timeout", timeout_s: Math.round(timeoutMs / 1000), recorded: rec };
+        } catch (e2) {
+          return { ok: false, error: `timeout; recorded fallback failed: ${e2}` };
+        }
+      }
+    } catch (err) {
+      // fn.callPromising threw synchronously (e.g. bad proxy): still leave "running".
+      onState?.("failed");
+      return { ok: false, error: String(err) };
+    } finally {
+      clearInterval(tick);
+      busy = false;
+    }
   }
 
-  // -------- Modo local (mock) --------
-  const mock = makeMock();
-  return {
-    mode: "local",
-    isIonq: false,
-    backendName: () => "local_mock",
-    async info() {
-      return mock.info();
-    },
-    async runLevel(fnName, params) {
-      return mock.runLevel(fnName, params);
-    },
-    async fullBatch(params) {
-      return mock.fullBatch(params);
-    },
-  };
+  async function runLevel(level, params, hooks) {
+    const res = await callApi(api.run_level, [level, params ?? {}], hooks);
+    if (res && res.recorded && !res.fallback) res.fallback = recordedToFallback(res.recorded, level);
+    return res;
+  }
+
+  return { info, callApi, runLevel, backendName, isBusy: () => busy || latePending };
 }
