@@ -1,0 +1,8 @@
+#app { font-family: system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1rem; color: #1a1a1a; background: #fff; }
+#buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+button { padding: 0.5rem 0.75rem; font-size: 1rem; border: 2px solid #0b3d91; background: #fff; color: #0b3d91; border-radius: 4px; cursor: pointer; }
+button:focus-visible { outline: 3px solid #b35900; outline-offset: 2px; }
+button:disabled { border-style: dashed; color: #555; cursor: not-allowed; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #767676; padding: 0.25rem 0.5rem; text-align: left; }
+#out { max-height: 24rem; overflow: auto; background: #f2f2f2; padding: 0.5rem; white-space: pre-wrap; }

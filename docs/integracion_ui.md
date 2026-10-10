@@ -15,6 +15,18 @@ Contrato: llamadas **posicionales** `fn.callPromising(backend, ...)` (patrón pr
 - Si hay timeout: llama `api.load_recorded.callPromising()` y muestra `recorded[i].result.levels[nivel]` de la misma forma (con la etiqueta "recorded").
 - Con `code: "ionq_job_used"`: un solo trabajo IonQ por Run; indica "Pulsa Run de nuevo para un nuevo trabajo".
 
+## Importante: el código de nivel superior de `main.js` NUNCA debe terminar (IonQ)
+
+Verificado en Qollab el 9 oct: Qollab solo deja enviar trabajos a IonQ **mientras el código de nivel superior de `main.js` sigue pendiente**. Cuando termina (la consola de Qollab dice "Done."), cualquier `backend.run` lanzado después desde un clic falla en ~0,5 s con `ConnectionError ... Failed to fetch`. Con el mismo circuito Bell: enviado dentro del run activo → OK; enviado tras "Done." → falla. En BasicSimulator no se nota (no usa red).
+
+Por eso, la **última línea** de `main.js`, después de registrar todos los listeners, debe ser:
+
+```js
+await new Promise(() => {});   // keep the Qollab run alive so button clicks can still reach IonQ
+```
+
+El botón Stop de Qollab sigue terminando el run. No pongas nada después de esa línea.
+
 ## Importante: Python bloquea el hilo principal
 
 Pyodide ejecuta Python de forma síncrona en el hilo principal del navegador. Mientras Python calcula (simuladores locales), **el timeout y el contador de JS no pueden dispararse** y la página queda congelada; solo funcionan durante esperas asíncronas reales (el trabajo remoto de IonQ). Por eso mantén pequeños los shots y circuitos en modo live (p. ej. 300-1000 shots) y no confíes en el timeout para interrumpir cálculo local.

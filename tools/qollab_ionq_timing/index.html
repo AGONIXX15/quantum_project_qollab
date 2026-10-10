@@ -1,0 +1,16 @@
+<main id="app">
+  <h1>IonQ submit timing probe</h1>
+  <p>Throwaway test (never part of the final upload). Pick an IonQ simulator, press Run, then ONE of:</p>
+  <ul>
+    <li><strong>A</strong>: submit while the run is still active (top-level code is still awaiting).</li>
+    <li><strong>B</strong>: end the run first, then press "Submit after Done" (the pattern the game UI uses).</li>
+  </ul>
+  <p>Press Stop and Run again before trying the other one (IonQ allows one job per run).</p>
+  <div role="group" aria-label="Probe actions" id="buttons">
+    <button type="button" id="a">A: submit while run is active</button>
+    <button type="button" id="b">B: end run first</button>
+    <button type="button" id="c" hidden>Submit after Done</button>
+  </div>
+  <p id="status" role="status" aria-live="polite">Loading...</p>
+  <pre id="out" tabindex="0" aria-label="Probe result"></pre>
+</main>

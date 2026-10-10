@@ -133,6 +133,11 @@ async function main() {
   status.textContent = `Ready (Pyodide loaded ${(performance.now() / 1000).toFixed(1)} s after page start)`;
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   status.textContent = `FAILED: ${err}`;
-});
+}
+// Keep the run alive: Qollab cuts IonQ access once top-level code finishes ("Done."),
+// so jobs submitted from later clicks fail with "Failed to fetch". Stop ends the run.
+await new Promise(() => {});
