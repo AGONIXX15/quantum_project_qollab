@@ -16,6 +16,29 @@
   <!-- Crisp label layer (CSS2D) over the canvas -->
   <div id="labels" aria-hidden="true"></div>
 
+  <!-- Map view switch: whole region <-> the three cities -->
+  <div id="map-tools" class="map-tools">
+    <button id="region-btn" class="btn btn--small btn--map" type="button" data-i18n="map.region">View whole region</button>
+  </div>
+
+  <!-- "Noise is someone listening": dial, diagrams, charts (chapter 'leak') -->
+  <section id="leak-view" class="leak" aria-label="Noise is someone listening" hidden></section>
+
+  <!-- Intro tour (dismissible; never blocks the autorun) -->
+  <div id="tour" class="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" hidden>
+    <h2 id="tour-title" class="tour__title" data-i18n="tour.title">Build Colombia's first quantum internet, one Bell pair at a time</h2>
+    <p id="tour-step" class="tour__step"></p>
+    <h3 id="tour-step-title" class="tour__step-title"></h3>
+    <p id="tour-text" class="tour__text" aria-live="polite"></p>
+    <div id="tour-dots" class="tour__dots" aria-hidden="true"></div>
+    <div class="tour__actions">
+      <button id="tour-skip" class="btn btn--small" type="button" data-i18n="tour.skip">Skip</button>
+      <span class="tour__spacer"></span>
+      <button id="tour-back" class="btn btn--small" type="button" data-i18n="tour.back">Back</button>
+      <button id="tour-next" class="btn btn--primary" type="button" data-i18n="tour.next">Next</button>
+    </div>
+  </div>
+
   <!-- Floating tooltip (hover on a city) -->
   <div id="tooltip" class="tooltip" hidden></div>
 
@@ -24,7 +47,10 @@
     <header class="panel__header">
       <div class="panel__header-row">
         <h1 class="brand" data-i18n="app.title">Entangle the Andes</h1>
-        <button id="lang-btn" class="btn btn--small" type="button" lang="es" data-i18n="lang.button" data-i18n-aria="lang.aria" aria-label="Cambiar a español (switch language to Spanish)">Español</button>
+        <div class="panel__header-btns">
+          <button id="tour-btn" class="btn btn--small" type="button" data-i18n="tour.btn" data-i18n-aria="tour.btn.aria" aria-label="Open the introduction">Intro</button>
+          <button id="lang-btn" class="btn btn--small" type="button" lang="es" data-i18n="lang.button" data-i18n-aria="lang.aria" aria-label="Cambiar a español (switch language to Spanish)">Español</button>
+        </div>
       </div>
       <p class="brand__sub" data-i18n="app.sub">Colombia's quantum internet · Bogotá · Medellín · Cali</p>
     </header>
@@ -34,6 +60,7 @@
         <span class="field__label" data-i18n="level.label">Level</span>
       </label>
       <select id="level-select"></select>
+      <p id="level-why" class="level-why"></p>
       <p id="level-summary" class="level-summary"></p>
     </section>
 
@@ -71,8 +98,8 @@
   </aside>
 
   <!-- Permanent legend -->
-  <div id="legend" class="legend">
-    <button id="legend-toggle" class="legend__toggle" type="button" aria-expanded="true" aria-controls="legend-body"><span data-i18n="legend.toggle">Legend</span> <span id="legend-arrow" aria-hidden="true">▾</span></button>
+  <div id="legend" class="legend collapsed">
+    <button id="legend-toggle" class="legend__toggle" type="button" aria-expanded="false" aria-controls="legend-body"><span data-i18n="legend.toggle">Legend</span> <span id="legend-arrow" aria-hidden="true">▸</span></button>
     <div id="legend-body" class="legend__body">
       <div class="legend__group">
         <span class="legend__group-title" data-i18n="legend.photons">Photons (Bell pairs)</span>

@@ -16,15 +16,25 @@ import { NetworkScene, classifyFidelity } from "./ui/scene.js";
 import { buildParamsForm, readParams, renderResult, linkStatusCard } from "./ui/panel.js";
 import { hasExplain, explainTitle, explainBefore, explainAfter, cityTooltip } from "./ui/explain.js";
 import { t, tOr, getLang, setLang, onLangChange, applyI18n } from "./ui/i18n.js";
+import { setIconText } from "./ui/icons.js";
+import { decorate } from "./ui/glossary.js";
+import { createTour } from "./ui/tour.js";
+import { createLeakView } from "./ui/leak.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
+  app: $("app"),
   scene: $("scene-container"),
   labels: $("labels"),
   loader: $("loader"),
   tooltip: $("tooltip"),
   levelSelect: $("level-select"),
   levelSummary: $("level-summary"),
+  levelWhy: $("level-why"),
+  regionBtn: $("region-btn"),
+  leakView: $("leak-view"),
+  tour: $("tour"),
+  tourBtn: $("tour-btn"),
   params: $("params"),
   runBtn: $("run-btn"),
   runStatus: $("run-status"),
@@ -54,7 +64,12 @@ let scene = null;
 let levelsById = {};
 let shown = null; // { levelId, result } currently rendered
 let selectedCity = null;
-let status = { state: "ready", secs: 0 };
+let status = { state: "ready", secs: 0, note: null };
+let leak = null;
+let tour = null;
+
+// Chapter 4 of the story: pure-JS explainer placed right after "noise" (no backend level).
+const LEAK_LEVEL = { id: "leak", title: "Noise is someone listening", summary: "One dial: how much information leaks to a third party.", params: {} };
 
 // Which geographic link each level animates by default.
 const LEVEL_LINK = {
@@ -68,18 +83,18 @@ const LEVEL_LINK = {
 };
 
 // --- status (text + icon, never colour alone) --------------------------------
-const STATE_ICON = { ready: "○", running: "⏳", success: "✔", failed: "✖", recorded: "▣" };
+const STATE_ICON = { ready: "idle", running: "running", success: "ok", failed: "fail", recorded: "recorded" };
 
 function renderStatus() {
-  const { state, secs } = status;
+  const { state, secs, note } = status;
   els.runStatus.dataset.state = state;
-  els.runStatusText.textContent = `${STATE_ICON[state]} ${t(`status.${state}`)}`;
+  setIconText(els.runStatusText, STATE_ICON[state], note ? t(note) : t(`status.${state}`));
   // The elapsed-seconds counter is visual only (aria-hidden): no announcement every second.
   els.runSecs.textContent = state === "running" ? ` · ${secs} s` : "";
 }
 
-function setState(state, secs = 0) {
-  status = { state, secs };
+function setState(state, secs = 0, note = null) {
+  status = { state, secs, note: state === "running" ? note : null };
   renderStatus();
   const busy = state === "running";
   els.runBtn.disabled = busy;
@@ -90,11 +105,14 @@ function setState(state, secs = 0) {
 // --- language ----------------------------------------------------------------
 function refreshLevelTexts() {
   const lvl = levelsById[els.levelSelect.value];
-  for (const opt of els.levelSelect.options) {
+  [...els.levelSelect.options].forEach((opt, i) => {
     const l = levelsById[opt.value];
-    opt.textContent = tOr(`level.${opt.value}.title`, l?.title ?? opt.value);
-  }
+    // Chapter number in front of every level: the selector reads as the story.
+    opt.textContent = `${i + 1} · ${tOr(`level.${opt.value}.title`, l?.title ?? opt.value)}`;
+  });
   els.levelSummary.textContent = lvl ? tOr(`level.${lvl.id}.summary`, lvl.summary || "") : "";
+  const idx = els.levelSelect.selectedIndex;
+  els.levelWhy.textContent = lvl ? `${t("level.chapter", { n: idx + 1 })} · ${tOr(`level.${lvl.id}.why`, "")}` : "";
 }
 
 function renderBackendBadge() {
@@ -123,6 +141,10 @@ onLangChange((lang) => {
   // Text only: do not touch the 3D scene (no camera move, no photons re-emitted).
   if (shown) renderShownText();
   else renderExplainer(els.levelSelect.value, null);
+  leak?.render();
+  tour?.render();
+  syncRegionBtn();
+  if (els.levelSelect.value === "leak") showLeakHints();
 });
 
 // --- explainer ---------------------------------------------------------------
@@ -152,6 +174,7 @@ function renderExplainer(levelId, result) {
     }
   }
   els.explainer.append(title, body);
+  decorate(els.explainer);
 }
 
 // --- cities (keyboard access in addition to 3D hover) ------------------------
@@ -242,13 +265,37 @@ function linkRows(d) {
 }
 
 // --- levels / run --------------------------------------------------------------
+function showLeakHints() {
+  els.params.replaceChildren();
+  const note = document.createElement("p");
+  note.className = "level-summary";
+  note.textContent = t("leak.noparams");
+  els.params.appendChild(note);
+  els.results.replaceChildren();
+  const empty = document.createElement("p");
+  empty.className = "results__empty";
+  empty.textContent = t("leak.results.hint");
+  els.results.appendChild(empty);
+}
+
 function selectLevel(id, { focus = true } = {}) {
   const lvl = levelsById[id];
   if (!lvl) return;
   refreshLevelTexts();
+  shown = null;
+  const isLeak = id === "leak";
+  leak?.[isLeak ? "show" : "hide"]();
+  els.regionBtn.hidden = isLeak;
+  els.legend.hidden = isLeak;
+  els.app.classList.toggle("is-leak", isLeak);
+  scene?.setIdle(isLeak); // the 3D map is covered: render at a low rate
+  if (isLeak) {
+    showLeakHints();
+    renderExplainer(id, null);
+    return;
+  }
   buildParamsForm(els.params, lvl, { ionq: /ionq/i.test(bridge.backendName()) });
   applyI18n(els.params);
-  shown = null;
   els.results.replaceChildren();
   const empty = document.createElement("p");
   empty.className = "results__empty";
@@ -258,6 +305,13 @@ function selectLevel(id, { focus = true } = {}) {
   renderExplainer(id, null);
   const linkId = LEVEL_LINK[id];
   if (focus && linkId && scene) scene.focusLink(linkId);
+  syncRegionBtn();
+}
+
+function syncRegionBtn() {
+  const region = scene?.viewMode === "region";
+  els.regionBtn.dataset.i18n = region ? "map.network" : "map.region";
+  els.regionBtn.textContent = t(region ? "map.network" : "map.region");
 }
 
 // Wait one frame so "Running" paints; fall back to a timer if rAF does not fire (hidden tab).
@@ -274,18 +328,30 @@ const nextFrame = () =>
     setTimeout(go, 50);
   });
 
-async function run() {
+// Chapter "leak": the dial is theory in JS; Run / "Measure it" overlay real circuit results.
+async function runLeak() {
+  if (status.state === "running") return;
+  setState("running", 0);
+  await nextFrame();
+  const out = await leak.measure();
+  // Nothing ran (busy / previous run pending): back to ready, the leak view shows the notice.
+  if (out.busy || out.pending) setState("ready");
+  else setState(out.anyFailed ? "failed" : out.anyRecorded ? "recorded" : "success");
+}
+
+async function run({ auto = false } = {}) {
   const levelId = els.levelSelect.value;
   if (!levelsById[levelId]) return;
+  if (levelId === "leak") return runLeak();
   const params = readParams(els.params);
-  setState("running", 0);
+  setState("running", 0, auto ? "autorun.running" : null);
   // Local simulators block the main thread: paint "Running" before Python starts.
   await nextFrame();
   let result;
   try {
     result = await bridge.runLevel(levelId, params, {
-      onState: (s) => (s === "running" ? setState("running", status.secs) : setState(s)),
-      onTick: (secs) => setState("running", secs),
+      onState: (s) => (s === "running" ? setState("running", status.secs, status.note) : setState(s)),
+      onTick: (secs) => setState("running", secs, status.note),
     });
   } catch (err) {
     result = { ok: false, error: String(err?.message ?? err) };
@@ -413,7 +479,7 @@ function showFatal(message) {
   els.results.replaceChildren();
   const box = document.createElement("div");
   box.className = "results__error";
-  box.textContent = `✖ ${message}`;
+  setIconText(box, "fail", message);
   els.results.appendChild(box);
 }
 
@@ -444,7 +510,10 @@ async function boot() {
   }
   buildCityList(infoData.geo.cities);
 
-  for (const lvl of infoData.levels) {
+  const levels = [...infoData.levels];
+  const at = levels.findIndex((l) => l.id === "noise");
+  levels.splice(at >= 0 ? at + 1 : levels.length, 0, LEAK_LEVEL);
+  for (const lvl of levels) {
     levelsById[lvl.id] = lvl;
     const opt = document.createElement("option");
     opt.value = lvl.id;
@@ -453,10 +522,32 @@ async function boot() {
   }
   els.levelSelect.addEventListener("change", () => selectLevel(els.levelSelect.value));
   els.runBtn.addEventListener("click", run);
-  selectLevel(infoData.levels[0].id, { focus: false }); // keep the opening view of the whole region
+  selectLevel(levels[0].id, { focus: false }); // keep the opening view of the network
   setState("ready");
 
-  requestAnimationFrame(() => setTimeout(hideLoader, 350));
+  leak = createLeakView(els.leakView, {
+    run: (level, params) => bridge.runLevel(level, params, { onTick: (secs) => setState("running", secs) }),
+    requestMeasure: runLeak,
+  });
+  leak.hide();
+  els.regionBtn.addEventListener("click", () => {
+    scene?.toggleRegion();
+    syncRegionBtn();
+  });
+  tour = createTour(els.tour, {});
+  els.tourBtn.addEventListener("click", () => tour.open(els.tourBtn));
+
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      hideLoader();
+      tour.open(els.tourBtn); // dismissible intro; the autorun below keeps going behind it
+    }, 350),
+  );
+  // One click -> results: the first level runs by itself with its defaults, on every backend.
+  run({ auto: true }).catch((err) => {
+    console.error(err);
+    setState("failed");
+  });
 
   // Harmless diagnostics hook (console / tests).
   window.__ETA__ = {

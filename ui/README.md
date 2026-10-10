@@ -19,6 +19,10 @@ ui/
   explain.js      # capa educativa ("¿Qué estoy viendo?") sobre i18n
   panel.js        # formulario desde info() y render de resultados / errores / recorded
   scene.js        # escena three.js (terreno real, ciudades, enlaces, fotones, bloom)
+  icons.js        # iconos SVG inline (sustituyen a los símbolos unicode de estado)
+  glossary.js     # tooltips de glosario (Bell pair, fidelity, QBER, CHSH, decoherence), accesibles con teclado
+  tour.js         # tarjeta de introducción de 5 pasos (focus trap, Esc, Siguiente/Atrás/Saltar)
+  leak.js         # capítulo 'leak' ("el ruido es alguien escuchando"): dial, diagramas, gráficas teoría vs medido
   terrain.js      # DEM decodificado, proyección compartida lat/lon -> escena, textura Blue Marble
   colombia-geo.js # proyección (= quantum/geo.py); contorno y relieve procedural ya no se usan en la escena
   data/           # GENERADO por tools/bake_terrain.py: terrain.js, earth_color.js, borders.js
@@ -125,3 +129,9 @@ fotones en movimiento, olas, pulsos ni giro automático).
 La IA se usó **solo en tiempo de desarrollo** (construir y revisar el código). La web no
 llama a ningún modelo en runtime ni necesita API keys; las únicas peticiones externas son
 GET de fuentes (Google Fonts) y, solo en `dev/`, el CDN de three.js.
+
+## Fase 2
+
+- **Autorun**: tras arrancar, `main.js` ejecuta solo el primer nivel (link) con sus valores por defecto en cualquier backend (en IonQ usa el único trabajo del Run).
+- **Capítulo 'leak'** (id `leak`, tras `noise`): solo JS + `run_level` existente (`noise` con `Fs=[F]`, `qkd` con `theta_deg`); en IonQ solo el primero va en vivo y el otro se muestra grabado (puntos huecos).
+- La intro se abre al cargar (sin almacenamiento, siempre); botón **Intro** para reabrirla.

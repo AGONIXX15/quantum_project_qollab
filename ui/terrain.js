@@ -21,7 +21,7 @@ export { BORDERS };
 
 // Vertical exaggeration (scene units per km). Land is exaggerated enough to read the three
 // cordilleras and the Sierra Nevada; the sea floor is flattened so trenches do not dominate.
-export const LAND_PER_KM = 0.2;
+export const LAND_PER_KM = 0.17;
 export const SEA_PER_KM = 0.05;
 
 export const toScene = (lat, lon) => {
@@ -30,7 +30,35 @@ export const toScene = (lat, lon) => {
 };
 export const fromScene = (x, z) => unproject(x / WORLD, z / WORLD);
 
-export const elevToUnits = (m) => (m >= 0 ? (m / 1000) * LAND_PER_KM : (m / 1000) * SEA_PER_KM);
+// Land height is compressed a little at the top (5 km is not 2x of 2.5 km) so the high peaks
+// stay believable at close zoom while the cordilleras still read clearly.
+export const elevToUnits = (m) => {
+  const km = m / 1000;
+  return km >= 0 ? (LAND_PER_KM * km) / (1 + 0.1 * km) : km * SEA_PER_KM;
+};
+
+// Slight earth curvature: everything sinks with the squared distance to the map centre.
+export const CURVE = 0.0022;
+export const curveDrop = (x, z) => -CURVE * (x * x + z * z);
+export const SEA_LEVEL = 0.006; // water surface height before curvature
+
+// 0 at the border of the data window, 1 inside: tapers the relief so no wall remains.
+// Elliptical vignette: full inside r = FADE_IN, fully dissolved (background colour) at r = FADE_OUT,
+// r being the normalised distance to the centre of the window (1 at the middle of each side).
+export const FADE_IN = 0.5, FADE_OUT = 0.9;
+export function fadeUV(u, v) {
+  const r = Math.hypot((u - 0.5) * 2, (v - 0.5) * 2);
+  const t = Math.min(1, Math.max(0, (r - FADE_IN) / (FADE_OUT - FADE_IN)));
+  return 1 - t * t * (3 - 2 * t);
+}
+export function edgeFactor(lat, lon) {
+  return fadeUV((lon - BBOX.west) / LON_SPAN, (lat - BBOX.south) / LAT_SPAN);
+}
+
+// Final surface height of a DEM sample (metres) at scene (x, z), with taper and curvature.
+export function surfaceUnits(m, lat, lon, x, z) {
+  return elevToUnits(m) * edgeFactor(lat, lon) + curveDrop(x, z);
+}
 
 // ---- DEM decode ---------------------------------------------------------------
 function decodeDem() {
@@ -66,8 +94,11 @@ export function elevationM(lat, lon) {
 // Terrain surface height in scene units at scene (x, z).
 export function heightAt(x, z) {
   const { lat, lon } = fromScene(x, z);
-  return elevToUnits(elevationM(lat, lon));
+  return surfaceUnits(elevationM(lat, lon), lat, lon, x, z);
 }
+
+// Highest of terrain and water surface: where markers and links must sit.
+export const surfaceAt = (x, z) => Math.max(heightAt(x, z), SEA_LEVEL + curveDrop(x, z));
 
 // Great-circle distance in km between two lat/lon points.
 export function haversineKm(lat1, lon1, lat2, lon2) {
@@ -78,7 +109,7 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 // ---- Colour texture ------------------------------------------------------------
-const BG = [18, 26, 43];
+const BG = [14, 22, 40]; // = fog / sky horizon colour
 const RAMP = [ // metres, r, g, b : fallback when the Blue Marble image cannot be decoded
   [-4500, 8, 28, 56], [-2000, 12, 48, 84], [-200, 38, 100, 130], [0, 61, 122, 70], [300, 92, 138, 74],
   [1200, 138, 122, 85], [2500, 150, 132, 100], [3800, 170, 164, 150], [4800, 245, 247, 252],
@@ -157,7 +188,7 @@ export function paintEarth(canvas, img) {
       const gain = 1.1 + 0.2 * m; // Blue Marble is dark under tropical forest
       r *= gain; g *= gain; b *= gain;
       const u = x / cw;
-      const f = smooth(0, 0.07, Math.min(u, 1 - u, v, 1 - v));
+      const f = fadeUV(u, v);
       d[o] = BG[0] + (r - BG[0]) * f;
       d[o + 1] = BG[1] + (g - BG[1]) * f;
       d[o + 2] = BG[2] + (b - BG[2]) * f;
@@ -167,14 +198,14 @@ export function paintEarth(canvas, img) {
 
   // Neighbour borders (faint) and Colombia border (glowing).
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
   ctx.lineWidth = 1;
   for (const ring of BORDERS.neighbours) { ctx.beginPath(); tracePath(ctx, ring, cw, ch); ctx.stroke(); }
   ctx.save();
-  ctx.shadowColor = "rgba(90,255,225,0.95)";
-  ctx.shadowBlur = 8;
-  ctx.strokeStyle = "rgba(170,255,238,0.95)";
-  ctx.lineWidth = 2;
+  ctx.shadowColor = "rgba(90,255,225,0.45)";
+  ctx.shadowBlur = 3;
+  ctx.strokeStyle = "rgba(170,255,238,0.6)";
+  ctx.lineWidth = 1.1;
   for (const ring of BORDERS.colombia) { ctx.beginPath(); tracePath(ctx, ring, cw, ch); ctx.closePath(); ctx.stroke(); }
   ctx.restore();
 }
@@ -189,4 +220,22 @@ export function loadEarthImage() {
   });
 }
 
-export const EARTH_SIZE = { w: 1024, h: Math.round((1024 * LAT_SPAN) / LON_SPAN) };
+export const EARTH_SIZE = { w: 2048, h: Math.round((2048 * LAT_SPAN) / LON_SPAN) };
+
+// Alpha map for the terrain: the same vignette, so the relief dissolves into the night sky.
+export function makeFadeCanvas(w = 256) {
+  const h = Math.round((w * LAT_SPAN) / LON_SPAN);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  const im = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = Math.round(255 * fadeUV((x + 0.5) / w, 1 - (y + 0.5) / h));
+      const o = (y * w + x) * 4;
+      im.data[o] = im.data[o + 1] = im.data[o + 2] = a; im.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(im, 0, 0);
+  return c;
+}

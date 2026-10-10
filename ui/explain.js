@@ -8,7 +8,7 @@
 
 import { t } from "./i18n.js";
 
-const LEVELS = ["link", "teleport", "noise", "swap", "purify", "qkd", "rescue"];
+const LEVELS = ["link", "teleport", "noise", "leak", "swap", "purify", "qkd", "rescue"];
 
 export function hasExplain(levelId) {
   return LEVELS.includes(levelId);

@@ -3,11 +3,11 @@
 
   Paleta: azules petróleo profundos con acentos cálidos (durazno/ámbar) y de
   datos (turquesa, coral, menta). Se aleja del típico cian-violeta sobre negro.
-  Tipografía: Space Grotesk (títulos) + Inter (texto), por Google Fonts (CDN
+  Tipografía: Exo 2 (títulos) + Inter (texto) + Roboto Mono (números), por Google Fonts (CDN
   público, igual que three.js). Fallback al stack del sistema si no cargan.
 */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap");
 
 :root {
   /* Fondo y superficies */
@@ -38,8 +38,8 @@
   --radius: 14px;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
   --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Space Grotesk", var(--font);
-  --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-display: "Exo 2", "Exo", var(--font);
+  --mono: "Roboto Mono", "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -290,7 +290,7 @@ input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; }
   to { opacity: 1; transform: none; }
 }
 .metric__name { font-size: 12px; color: var(--text-dim); font-family: var(--mono); margin-bottom: 4px; }
-.metric__value { font-size: 21px; font-weight: 600; font-family: var(--font-display); }
+.metric__value { font-size: 20px; font-weight: 600; font-family: var(--mono); }
 .metric__detail { font-size: 12px; color: var(--text-dim); margin-top: 3px; font-family: var(--mono); }
 .metric__bar {
   margin-top: 9px;
@@ -387,14 +387,14 @@ input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; }
   position: absolute;
   /* Centrada en la franja libre entre el panel de control (~360px izq) y el de
      resultados (~372px der), sin usar transform (la animación lo sobreescribe). */
-  left: 380px;
-  right: 388px;
-  margin: 0 auto;
+  left: 360px;
+  right: auto;
+  margin: 0;
   bottom: calc(16px + var(--footer-h));
   z-index: 10;
-  width: fit-content;
-  max-width: calc(100vw - 800px);
-  min-width: 300px;
+  width: clamp(240px, calc(100vw - 780px), 720px);
+  max-width: calc(100vw - 780px);
+  min-width: 0;
   padding: 11px 14px;
   background: var(--bg-panel);
   backdrop-filter: blur(18px);
@@ -431,7 +431,10 @@ input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; }
   max-height: 420px;
 }
 .legend__group { flex: 1 1 150px; }
-.legend.collapsed .legend__body { max-height: 0; opacity: 0; margin-top: 0; }
+.legend.collapsed .legend__body { max-height: 0; opacity: 0; margin-top: 0; visibility: hidden; }
+.legend.collapsed { min-width: 0; width: fit-content; padding: 7px 14px; border-radius: 999px; }
+.legend.collapsed .legend__toggle { width: auto; }
+.legend.collapsed .legend__body { display: none; }
 .legend__group { display: flex; flex-direction: column; gap: 5px; }
 .legend__group-title {
   font-size: 12px;
@@ -573,4 +576,98 @@ input[type="range"]:disabled { opacity: 0.4; }
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ================= Phase 2 ================= */
+.ico { vertical-align: -2px; flex: none; margin-right: 5px; }
+.ico--spin { animation: icoSpin 1s linear infinite; }
+@keyframes icoSpin { to { transform: rotate(360deg); } }
+.link-label__status, .banner strong, .strategy__status, .run-status, .linkstatus__value, .city-label { display: flex; align-items: center; justify-content: center; }
+.banner, .results__error { display: block; }
+.banner strong { display: flex; justify-content: flex-start; }
+.run-status #run-status-text { display: inline-flex; align-items: center; }
+.city-label { gap: 5px; }
+.city-label .ico { margin-right: 0; }
+
+.panel__header-btns { display: flex; gap: 6px; flex: none; }
+.level-why { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--warm-2); font-weight: 500; }
+.level-why:empty { display: none; }
+
+.map-tools { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9; }
+.btn--map { background: var(--bg-panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 7px 14px; font-size: 12.5px; }
+
+/* Glossary terms */
+.term { border-bottom: 1px dotted var(--warm-2); cursor: help; }
+.term:focus-visible { outline: 2px solid var(--warm-2); outline-offset: 1px; border-radius: 3px; }
+.glossary-pop {
+  position: fixed; z-index: 60; max-width: 280px; padding: 9px 12px; font-size: 12.5px; line-height: 1.45;
+  background: #101a2e; color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.glossary-pop strong { display: block; color: var(--cyan); font-family: var(--font-display); margin-bottom: 2px; }
+
+/* Intro tour */
+.tour {
+  position: absolute; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 32px)); padding: 20px 22px 18px;
+  background: var(--bg-panel-solid); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow);
+}
+.tour__title { margin: 0 0 12px; font-family: var(--font-display); font-size: 17px; line-height: 1.3; color: var(--warm-2); }
+.tour__step { margin: 0; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); font-family: var(--mono); }
+.tour__step-title { margin: 4px 0 6px; font-family: var(--font-display); font-size: 16px; color: var(--cyan); }
+.tour__text { margin: 0 0 14px; font-size: 14px; line-height: 1.55; color: var(--text); min-height: 66px; }
+.tour__dots { display: flex; gap: 6px; margin-bottom: 14px; }
+.tour__dot { width: 22px; height: 4px; border-radius: 2px; background: rgba(150, 180, 220, 0.25); }
+.tour__dot.is-on { background: var(--cyan); }
+.tour__actions { display: flex; align-items: center; gap: 8px; }
+.tour__spacer { flex: 1; }
+
+/* Leak explainer */
+.leak {
+  position: absolute; z-index: 8; top: 16px; bottom: calc(16px + var(--footer-h)); left: 360px; right: 388px;
+  overflow-y: auto; overflow-x: hidden; padding: 16px 18px 20px;
+  background: var(--bg-panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.leak__title { margin: 0; font-family: var(--font-display); font-size: 20px; color: var(--warm-2); }
+.leak__sub { margin: 4px 0 14px; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.leak__dial { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, 0.03); }
+.leak__dial-label { grid-column: 1 / -1; font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.leak__dial input[type="range"] { width: 100%; accent-color: var(--warm-2); height: 28px; }
+.leak__dial-out { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--warm-2); min-width: 52px; text-align: right; }
+.leak__dial-read { grid-column: 1 / -1; font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.leak__figs, .leak__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.leak__fig { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, 0.03); }
+.leak__figcap { font-family: var(--font-display); font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.leak-diagram, .leak-chart { width: 100%; height: auto; display: block; }
+.leak__bar-in { display: flex; gap: 2px; min-height: 26px; margin-top: 4px; border-radius: 6px; overflow: hidden; font-family: var(--mono); font-size: 11px; }
+.leak__seg { display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden; white-space: normal; text-align: center; line-height: 1.2; padding: 3px 4px; overflow-wrap: anywhere; }
+.leak__seg--ab { background: #1d6f63; color: #fff; }
+.leak__seg--third { background: repeating-linear-gradient(135deg, #7a4210 0 6px, #8d4f17 6px 12px); color: #fff; }
+.leak__figtext { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.leak__chart { padding: 6px 6px 2px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, 0.03); }
+.leak__legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 12px; font-size: 12px; color: var(--text); }
+.leak__leg-item { display: inline-flex; align-items: center; gap: 6px; }
+.leak__actions { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.leak__status { margin: 0; font-size: 12.5px; color: var(--text); display: flex; align-items: center; min-height: 18px; }
+.leak__take { padding: 12px 14px; border-radius: 11px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(47, 224, 192, 0.08), rgba(242, 161, 92, 0.08)); }
+.leak__take-h { margin: 0 0 6px; font-family: var(--font-display); font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warm-2); }
+.leak__take p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; }
+.leak__take p:last-child { margin-bottom: 0; }
+.leak__table { margin-top: 12px; font-size: 12.5px; }
+.leak__table summary { cursor: pointer; color: var(--cyan); font-weight: 600; }
+.leak__table table { width: 100%; border-collapse: collapse; margin-top: 8px; font-family: var(--mono); font-size: 12px; }
+.leak__table caption { text-align: left; color: var(--text-dim); padding-bottom: 4px; font-family: var(--font); }
+.leak__table th, .leak__table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.leak__table thead th { color: var(--text-dim); }
+/* Between 981 and 1180 px the results panel hides in this chapter: the leak view takes its place. */
+@media (max-width: 1180px) {
+  #app.is-leak .panel--right { display: none; }
+  .leak { right: 16px; }
+}
+@media (max-width: 760px) { .leak__figs, .leak__charts { grid-template-columns: minmax(0, 1fr); } }
+.leak__fig, .leak__chart { min-width: 0; }
+@media (max-width: 980px) {
+  .leak { position: static; margin: 8px auto; width: calc(100vw - 32px); }
+  .map-tools { position: static; transform: none; margin: 8px auto; text-align: center; }
 }

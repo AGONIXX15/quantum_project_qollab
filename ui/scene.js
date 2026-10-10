@@ -30,8 +30,9 @@ import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer
 
 import {
   BBOX, BORDERS, DEM, DEM_W, DEM_H, LON_SPAN, LAT_SPAN, EARTH_SIZE,
-  toScene, elevToUnits, heightAt, haversineKm, paintEarth, loadEarthImage,
+  toScene, surfaceUnits, surfaceAt, curveDrop, CURVE, SEA_LEVEL, haversineKm, paintEarth, loadEarthImage, makeFadeCanvas,
 } from "./terrain.js";
+import { icon, setIconText } from "./icons.js";
 import { t, onLangChange } from "./i18n.js";
 
 const COLORS = {
@@ -46,7 +47,7 @@ const COLORS = {
   photon1: 0xff7a1a,       // parity 1 (error): intense orange
 };
 
-const FOG_COLOR = 0x1a2338;
+const FOG_COLOR = 0x0e1628; // deep night blue: fog, sky horizon and the terrain vignette all match
 const CLEARANCE = 0.3;     // minimum height of a link above the terrain (scene units)
 const NODE_LIFT = 0.2;     // height of the qubit sphere above the ground
 
@@ -70,7 +71,7 @@ const KIND_COLOR = {
   healthy: COLORS.linkHealthy, degraded: COLORS.linkDegraded, broken: COLORS.linkBroken,
   rescued: COLORS.linkRescued, idle: COLORS.linkIdle,
 };
-const KIND_ICON = { healthy: "✔", degraded: "▲", broken: "✖", rescued: "↻", idle: "○" };
+const KIND_ICON = { healthy: "ok", degraded: "warn", broken: "fail", rescued: "rescued", idle: "idle" };
 // Width multiplier and dashing: second and third signals besides colour.
 const KIND_WIDTH = { healthy: 1.0, rescued: 1.0, idle: 0.7, degraded: 0.75, broken: 0.5 };
 
@@ -90,6 +91,9 @@ const GEO_LABELS = [
   ["geo.llanos", "region", 4.4, -70.6, 0.3],
   ["geo.amazon", "region", -1.6, -70.8, 0.3],
 ];
+// Collision priority (lower wins): cities and the active link badge 0, link badges 1,
+// Colombia 2, other countries 3, oceans 4, cordilleras 5, regions 6.
+const LABEL_PRIO = { colombia: 2, country: 3, ocean: 4, range: 5, region: 6 };
 
 export class NetworkScene {
   constructor(container, labelLayer) {
@@ -98,6 +102,10 @@ export class NetworkScene {
     this.cities = {};
     this.links = {};
     this.geoLabels = [];
+    this.labelItems = []; // every collidable HTML label: { el, prio | link }
+    this._frame = 0;
+    this._userMoved = false;
+    this.viewMode = "network";
     this.clock = new THREE.Clock();
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -146,7 +154,7 @@ export class NetworkScene {
 
   _initScene() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x121a2b);
+    this.scene.background = new THREE.Color(FOG_COLOR);
     // Atmospheric fog: Colombia (distance ~18) stays crisp, the far region fades out and
     // the edges of the data window disappear.
     this.scene.fog = new THREE.FogExp2(FOG_COLOR, 0.017);
@@ -167,12 +175,30 @@ export class NetworkScene {
     this.controls.screenSpacePanning = false;
     this.controls.autoRotate = false;
 
-    // Explicit framing before the first render: Colombia in the middle, region around it.
-    this.home = { target: new THREE.Vector3(0, 0, 0.5), position: new THREE.Vector3(0, 13.5, 11.5) };
-    this.camera.position.copy(this.home.position);
-    this.controls.target.copy(this.home.target);
+    this.controls.addEventListener("start", () => { this._userMoved = true; this.viewMode = "custom"; });
+
+    // Explicit framing before the first render. Two named views: the whole region, and the
+    // Bogota-Medellin-Cali triangle (recomputed from the cities in buildFromGeo).
+    this.views = {
+      region: this._view(new THREE.Vector3(0, 0, 0.5), 19, 0.9),
+      network: this._view(new THREE.Vector3(-0.4, 0.2, -0.2), 9, 0.95),
+    };
+    this.camera.position.copy(this.views.network.position);
+    this.controls.target.copy(this.views.network.target);
     this.camera.lookAt(this.controls.target);
     this.controls.update();
+  }
+
+  // A camera pose looking at `target` from `dist`, polar angle from vertical, north up.
+  _view(target, dist, polar, az = 0) {
+    return {
+      target,
+      position: new THREE.Vector3(
+        target.x + dist * Math.sin(polar) * Math.sin(az),
+        target.y + dist * Math.cos(polar),
+        target.z + dist * Math.sin(polar) * Math.cos(az)
+      ),
+    };
   }
 
   _initLights() {
@@ -199,9 +225,9 @@ export class NetworkScene {
   // Sky: dome with a vertical gradient.
   _initSky() {
     const uniforms = {
-      zenith: { value: new THREE.Color(0x14213f) },
-      mid: { value: new THREE.Color(0x242d4d) },
-      horizon: { value: new THREE.Color(0x2c3856) },
+      zenith: { value: new THREE.Color(0x04070f) },
+      mid: { value: new THREE.Color(0x0a1122) },
+      horizon: { value: new THREE.Color(FOG_COLOR) },
     };
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(90, 32, 20),
@@ -231,6 +257,20 @@ export class NetworkScene {
       })
     );
     this.scene.add(sky);
+
+    // A few faint stars on the upper dome (static; deep-space feel behind the fading map).
+    const N = 450, arr = new Float32Array(N * 3);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < N; i++) {
+      const u = rnd() * Math.PI * 2, y = 0.08 + rnd() * 0.92, r = Math.sqrt(1 - y * y);
+      arr.set([Math.cos(u) * r * 85, y * 85, Math.sin(u) * r * 85], i * 3);
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+    this.scene.add(new THREE.Points(sg, new THREE.PointsMaterial({
+      color: 0xbcd0ff, size: 1.4, sizeAttenuation: false, transparent: true, opacity: 0.55, fog: false, depthWrite: false,
+    })));
   }
 
   // Real DEM mesh (one vertex per DEM cell, ~185k vertices) with the Blue Marble draped.
@@ -245,7 +285,7 @@ export class NetworkScene {
         const p = toScene(lat, lon);
         const k = j * W + i;
         pos[3 * k] = p.x;
-        pos[3 * k + 1] = elevToUnits(DEM[k]);
+        pos[3 * k + 1] = surfaceUnits(DEM[k], lat, lon, p.x, p.z);
         pos[3 * k + 2] = p.z;
         uv[2 * k] = (i + 0.5) / W;
         uv[2 * k + 1] = 1 - (j + 0.5) / H;
@@ -268,21 +308,23 @@ export class NetworkScene {
     geo.computeBoundingSphere();
     this.terrainVertices = W * H;
 
-    // Texture: elevation ramp first (fallback), Blue Marble once it decodes.
+    // Texture: Blue Marble once it decodes (elevation colour ramp if it cannot).
     const canvas = document.createElement("canvas");
     canvas.width = EARTH_SIZE.w;
     canvas.height = EARTH_SIZE.h;
-    paintEarth(canvas, null);
+    const c0 = canvas.getContext("2d");
+    c0.fillStyle = "#0e1628";
+    c0.fillRect(0, 0, canvas.width, canvas.height);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
     loadEarthImage().then((img) => {
-      if (!img) return; // keep the elevation-ramp texture
-      paintEarth(canvas, img);
+      paintEarth(canvas, img); // img === null -> elevation colour ramp fallback
       tex.needsUpdate = true;
     });
 
-    this.terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
+    const fadeTex = new THREE.CanvasTexture(makeFadeCanvas());
+    this.terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, alphaMap: fadeTex, transparent: true, roughness: 1, metalness: 0 }));
     this.scene.add(this.terrain);
   }
 
@@ -298,7 +340,7 @@ export class NetworkScene {
         for (let s = 0; s < steps; s++) {
           const f = s / steps;
           const p = toScene(lat0 + (lat1 - lat0) * f, lon0 + (lon1 - lon0) * f);
-          const y = Math.max(0.004, heightAt(p.x, p.z)) + 0.02;
+          const y = surfaceAt(p.x, p.z) + 0.02;
           segs.push(new THREE.Vector3(p.x, y, p.z));
         }
       }
@@ -306,9 +348,10 @@ export class NetworkScene {
     }
     const line = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ color: 0xb8fff0, transparent: true, opacity: 0.9 })
+      new THREE.LineBasicMaterial({ color: 0xb8fff0, transparent: true, opacity: 0.5, depthWrite: false })
     );
     this.scene.add(line);
+    this.borderLine = line;
   }
 
   // Sea surface at 0 m: transparent, so the bathymetry shows through.
@@ -334,6 +377,7 @@ export class NetworkScene {
           void main() {
             vUv = uv;
             vec4 wp = modelMatrix * vec4(position, 1.0);
+            wp.y -= ${CURVE.toFixed(5)} * (wp.x * wp.x + wp.z * wp.z); // same curvature as the terrain
             vWorld = wp.xyz;
             gl_Position = projectionMatrix * viewMatrix * wp;
           }`,
@@ -354,12 +398,14 @@ export class NetworkScene {
             vec3 h = normalize(v + normalize(sunDir));
             col += vec3(1.0, 0.85, 0.65) * pow(max(dot(n, h), 0.0), 90.0) * 0.55;
             float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
-            float a = (0.3 + 0.35 * fres) * smoothstep(0.0, 0.07, edge);
+            float r = length((vUv - 0.5) * 2.0);
+            float fade = 1.0 - smoothstep(0.5, 0.9, r);
+            float a = (0.3 + 0.35 * fres) * fade;
             gl_FragColor = vec4(col, a);
           }`,
       })
     );
-    sea.position.set((w.x + e.x) / 2, 0.006, (n.z + s.z) / 2);
+    sea.position.set((w.x + e.x) / 2, SEA_LEVEL, (n.z + s.z) / 2);
     sea.renderOrder = 1;
     this.scene.add(sea);
   }
@@ -370,9 +416,11 @@ export class NetworkScene {
       el.className = "geo-label " + kind.split(" ").map((k) => `geo-label--${k}`).join(" ");
       const label = new CSS2DObject(el);
       const p = toScene(lat, lon);
-      label.position.set(p.x, Math.max(0, heightAt(p.x, p.z)) + lift, p.z);
+      label.position.set(p.x, surfaceAt(p.x, p.z) + lift, p.z);
       this.scene.add(label);
       this.geoLabels.push({ key, el });
+      const base = kind.split(" ")[1] ?? kind.split(" ")[0];
+      this.labelItems.push({ el, prio: LABEL_PRIO[base] ?? 6 });
     }
     this._retext();
   }
@@ -388,11 +436,24 @@ export class NetworkScene {
     for (const [id, c] of Object.entries(geo.cities)) this._buildCity(id, c);
     for (const link of geo.links) this._buildLink(link);
     this._retext();
+
+    // Opening view: the triangle of the three main cities, region still visible around it.
+    const main = Object.values(this.cities).filter((c) => !c.data.challenge);
+    if (main.length) {
+      const cen = main.reduce((a, c) => a.add(c.pos), new THREE.Vector3()).multiplyScalar(1 / main.length);
+      this.views.network = this._view(new THREE.Vector3(cen.x, 0.15, cen.z), 8.6, 0.95);
+      if (!this._userMoved && !this._tween) {
+        this.camera.position.copy(this.views.network.position);
+        this.controls.target.copy(this.views.network.target);
+        this.camera.lookAt(this.controls.target);
+        this.controls.update();
+      }
+    }
   }
 
   _buildCity(id, c) {
     const p = toScene(c.lat, c.lon); // same projection as the terrain
-    const ground = Math.max(0, heightAt(p.x, p.z)) + 0.02;
+    const ground = surfaceAt(p.x, p.z) + 0.02;
     const pos = new THREE.Vector3(p.x, ground, p.z);
     const challenge = !!c.challenge;
     const color = challenge ? COLORS.cityChallenge : COLORS.city;
@@ -445,10 +506,12 @@ export class NetworkScene {
 
     const el = document.createElement("div");
     el.className = "city-label" + (challenge ? " city-label--challenge" : "");
-    el.textContent = (challenge ? "◆ " : "") + c.name;
+    if (challenge) el.appendChild(icon("diamond", 10));
+    el.appendChild(document.createTextNode(c.name));
     const label = new CSS2DObject(el);
     label.position.set(0, 0.55, 0);
     group.add(label);
+    this.labelItems.push({ el, prio: 0 });
 
     this.scene.add(group);
     this.cities[id] = { group, core, hit, pulse, pos, data: c, color };
@@ -469,7 +532,7 @@ export class NetworkScene {
       const f = i / N;
       const x = THREE.MathUtils.lerp(a.x, b.x, f), z = THREE.MathUtils.lerp(a.z, b.z, f);
       xs.push(x); zs.push(z);
-      ground.push(Math.max(0, heightAt(x, z)));
+      ground.push(surfaceAt(x, z));
       ys.push(THREE.MathUtils.lerp(a.y, b.y, f) + Math.sin(Math.PI * f) * dist * 0.1);
     }
     for (let pass = 0; pass < 4; pass++) { // lift over ridges, then smooth
@@ -492,6 +555,7 @@ export class NetworkScene {
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
+      depthWrite: false,
       vertexShader: `
         uniform float width;
         varying vec2 vUv;
@@ -516,13 +580,21 @@ export class NetworkScene {
     const hit = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.14, 5, false), new THREE.MeshBasicMaterial({ visible: false }));
     this.scene.add(hit);
 
-    // Pair source in the middle of the link (visual).
+    // Pair source in the middle of the link (visual): bright core + flat ring, clearly not a photon.
     const mid = curve.getPointAt(0.5);
-    const src = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const src = new THREE.Group();
     src.position.copy(mid);
+    src.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.075, 0), new THREE.MeshBasicMaterial({ color: 0xfff1b8 })));
+    const srcRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.13, 0.155, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+    );
+    srcRing.rotation.x = -Math.PI / 2;
+    src.add(srcRing);
     this.scene.add(src);
 
-    // Floating badge: F value + status text (+ great-circle km while hovered/focused).
+    // Floating badge: F value + status text (+ great-circle km while hovered/focused),
+    // anchored to the arc apex by a thin leader line.
     const el = document.createElement("div");
     el.className = "link-label";
     const fEl = document.createElement("div"); fEl.className = "link-label__f";
@@ -530,29 +602,39 @@ export class NetworkScene {
     const kEl = document.createElement("div"); kEl.className = "link-label__km";
     el.append(fEl, sEl, kEl);
     const label = new CSS2DObject(el);
+    const apex = curve.getPoints(80).reduce((best, p) => (p.y > best.y ? p : best));
     // Push the badge outwards from the centre of the main triangle so the three badges
     // do not pile up on top of each other (the cities are only ~1 unit apart).
     const main = Object.values(this.cities).filter((c) => !c.data.challenge);
     const cen = main.reduce((acc, c) => acc.add(c.pos), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, main.length));
-    const out = new THREE.Vector3(mid.x - cen.x, 0, mid.z - cen.z);
-    if (out.lengthSq() > 1e-6) out.normalize().multiplyScalar(1.0);
-    label.position.copy(mid).add(out).add(new THREE.Vector3(0, 0.15, 0));
+    const out = new THREE.Vector3(apex.x - cen.x, 0, apex.z - cen.z);
+    if (out.lengthSq() > 1e-6) out.normalize().multiplyScalar(0.9);
+    const badgePos = apex.clone().add(out).add(new THREE.Vector3(0, 0.6, 0));
+    label.position.copy(badgePos);
     this.scene.add(label);
+    const leader = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([apex, badgePos.clone().sub(new THREE.Vector3(0, 0.12, 0))]),
+      new THREE.LineBasicMaterial({ color: COLORS.linkIdle, transparent: true, opacity: 0.8 })
+    );
+    this.scene.add(leader);
 
     const km = haversineKm(ca.data.lat, ca.data.lon, cb.data.lat, cb.data.lon);
-    this.links[id] = {
-      id, tube, hit, src, uniforms, curve, a: aId, b: bId, km, geo: linkData,
-      F: null, status: null, photons: null, el, fEl, sEl, kEl,
+    const entry = {
+      id, tube, hit, src, srcRing, uniforms, curve, a: aId, b: bId, km, geo: linkData,
+      F: null, status: null, photons: null, el, fEl, sEl, kEl, leader,
     };
+    this.links[id] = entry;
+    this.labelItems.push({ el, link: entry });
     this._renderLinkLabel(this.links[id]);
   }
 
   _renderLinkLabel(l) {
     const kind = statusKind(l.F, l.status);
     l.fEl.textContent = l.F == null ? "F = —" : `F = ${l.F.toFixed(2)}`;
-    l.sEl.textContent = `${KIND_ICON[kind]} ${t(`link.${kind}`)}`;
+    setIconText(l.sEl, KIND_ICON[kind], t(`link.${kind}`), 12);
     l.kEl.textContent = t("link.km", { km: Math.round(l.km) });
     l.el.style.setProperty("--lk", "#" + KIND_COLOR[kind].toString(16).padStart(6, "0"));
+    l.leader.material.color.setHex(KIND_COLOR[kind]);
   }
 
   _applyKind(l) {
@@ -583,12 +665,13 @@ export class NetworkScene {
     const link = this.links[linkId];
     if (!link || !samples?.length) return;
     this._disposePhotons(link);
-    const pairs = Math.min(samples.length, 24);
-    const geo = new THREE.SphereGeometry(0.05, 14, 14);
+    const pairs = Math.min(samples.length, 16);
+    const geo = new THREE.SphereGeometry(0.07, 18, 18);
+    // Opaque, saturated colours (no additive blending): parity 0 reads as clear cyan-blue and
+    // parity 1 as orange; they stay below the bloom threshold so ACES/bloom do not turn them white.
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
       vertexShader: `
         attribute vec3 instanceColor;
         varying vec3 vColor;
@@ -607,14 +690,14 @@ export class NetworkScene {
         varying vec3 vViewDir;
         void main() {
           float facing = max(dot(normalize(vNormalV), normalize(vViewDir)), 0.0);
-          float core = pow(facing, 1.2);
-          float rim = pow(1.0 - facing, 2.0);
-          vec3 col = vColor * (0.5 + 0.5 * core) + vColor * rim * 0.4;
-          gl_FragColor = vec4(col, clamp(core + rim * 0.8, 0.0, 1.0));
+          vec3 col = vColor * (0.8 + 0.5 * facing);
+          col = mix(col, col * 0.35, pow(1.0 - facing, 3.0)); // dark rim = crisp outline
+          gl_FragColor = vec4(col, 1.0);
         }`,
     });
     const mesh = new THREE.InstancedMesh(geo, mat, pairs * 2);
     mesh.frustumCulled = false;
+    mesh.renderOrder = 3; // after the (non depth-writing) tubes so the pairs are never tinted by them
     const colorArr = new Float32Array(pairs * 6);
     const c0 = new THREE.Color(COLORS.photon0), c1 = new THREE.Color(COLORS.photon1);
     const data = [];
@@ -686,6 +769,7 @@ export class NetworkScene {
       target.z + dist * Math.sin(polar) * Math.cos(az)
     );
     this._moveCamera(target.clone(), toPos);
+    this.viewMode = "focus";
   }
 
   _moveCamera(toTarget, toPos) {
@@ -733,8 +817,21 @@ export class NetworkScene {
     this._flyTo(target, THREE.MathUtils.clamp(4.5 + link.curve.getLength() * 1.6, 7, 13));
   }
 
-  resetCamera() {
-    this._moveCamera(this.home.target.clone(), this.home.position.clone());
+  // Named views: "region" (everything around Colombia) and "network" (the three cities).
+  viewRegion() {
+    this._moveCamera(this.views.region.target.clone(), this.views.region.position.clone());
+    this.viewMode = "region";
+    return this.viewMode;
+  }
+
+  viewNetwork() {
+    this._moveCamera(this.views.network.target.clone(), this.views.network.position.clone());
+    this.viewMode = "network";
+    return this.viewMode;
+  }
+
+  toggleRegion() {
+    return this.viewMode === "region" ? this.viewNetwork() : this.viewRegion();
   }
 
   highlightLink(linkId) {
@@ -823,6 +920,7 @@ export class NetworkScene {
   _animate = () => {
     this._raf = requestAnimationFrame(this._animate);
     this.clock.getDelta();
+    if (this._idle && this._frame++ % 30 !== 0) return; // ~2 fps behind the leak view
     const time = this.reducedMotion ? 0 : this.clock.elapsedTime;
 
     if (this.seaUniforms) this.seaUniforms.time.value = time;
@@ -837,9 +935,16 @@ export class NetworkScene {
 
     for (const link of Object.values(this.links)) {
       link.uniforms.time.value = time;
+      const k = this.reducedMotion ? 0.5 : (time * 0.7) % 1;
+      link.srcRing.scale.setScalar(0.85 + 0.6 * k);
+      link.srcRing.material.opacity = this.reducedMotion ? 0.9 : 0.9 * (1 - k);
       if (link.photons && !this.reducedMotion) this._placePhotons(link, time);
     }
 
+    if (this.borderLine) { // thinner/dimmer border when close
+      const d = this.camera.position.distanceTo(this.controls.target);
+      this.borderLine.material.opacity = THREE.MathUtils.clamp((d - 6) / 18, 0.08, 0.5);
+    }
     this._stepTween();
     this._checkHover();
     this.controls.update();
@@ -854,7 +959,61 @@ export class NetworkScene {
     }
     this.composer.render();
     this.labelRenderer.render(this.scene, this.camera);
+    if (this._frame++ % 6 === 0) this._cullLabels();
   };
+
+  // Screen-space label collision culling: highest priority first, a label that overlaps an
+  // already accepted one is hidden (visibility only, so layout and CSS2D stay untouched).
+  // All rects are read first, then visibility is written (no layout thrash); arrays are reused.
+  _cullLabels() {
+    const items = this.labelItems;
+    const n = items.length;
+    if (!this._cull || this._cull.n !== n) {
+      this._cull = { n, rect: new Float32Array(n * 4), live: new Uint8Array(n), prio: new Int16Array(n), order: Array.from({ length: n }, (_, i) => i), keptIdx: new Int16Array(n) };
+    }
+    const { rect, live, prio, order, keptIdx } = this._cull;
+    const view = this.container.getBoundingClientRect();
+    for (let i = 0; i < n; i++) { // read phase
+      const it = items[i];
+      const r = it.el.getBoundingClientRect();
+      rect[4 * i] = r.left; rect[4 * i + 1] = r.top; rect[4 * i + 2] = r.right; rect[4 * i + 3] = r.bottom;
+      live[i] = it.el.style.display !== "none" && r.width > 0 && r.right > view.left && r.left < view.right && r.bottom > view.top && r.top < view.bottom ? 1 : 0;
+      prio[i] = it.link ? (it.link.id === this._activeLinkId || it.link.id === this._hoverLinkId ? 0 : 1) : it.prio;
+    }
+    // insertion sort of the persistent index array by (priority, index): no allocation
+    for (let i = 1; i < n; i++) {
+      const v = order[i];
+      let j = i - 1;
+      while (j >= 0 && (prio[order[j]] > prio[v] || (prio[order[j]] === prio[v] && order[j] > v))) { order[j + 1] = order[j]; j--; }
+      order[j + 1] = v;
+    }
+    const PAD = 4;
+    let nk = 0;
+    for (let q = 0; q < n; q++) { // decide phase (pure arithmetic)
+      const i = order[q];
+      let ok = live[i] === 1;
+      if (ok) {
+        const l = rect[4 * i], t = rect[4 * i + 1], r = rect[4 * i + 2], b = rect[4 * i + 3];
+        for (let k = 0; k < nk; k++) {
+          const o = keptIdx[k] * 4;
+          if (l < rect[o + 2] + PAD && r + PAD > rect[o] && t < rect[o + 3] + PAD && b + PAD > rect[o + 1]) { ok = false; break; }
+        }
+      }
+      if (ok) keptIdx[nk++] = i;
+      live[i] = ok ? 2 : 0;
+    }
+    for (let i = 0; i < n; i++) { // write phase
+      const it = items[i];
+      const ok = live[i] === 2;
+      if (it._vis !== ok) { it.el.style.visibility = ok ? "visible" : "hidden"; it._vis = ok; }
+      if (it.link) it.link.leader.visible = ok;
+    }
+  }
+
+  // While the leak view covers the map there is nothing to see: render rarely.
+  setIdle(v) {
+    this._idle = !!v;
+  }
 
   dispose() {
     cancelAnimationFrame(this._raf);

@@ -12,6 +12,7 @@
 */
 
 import { t, dictionaries } from "./i18n.js";
+import { iconEl } from "./icons.js";
 
 const hasKey = (k) => k in dictionaries.en;
 
@@ -358,8 +359,8 @@ function strategyCard(s) {
   const card = el("div", `metric strategy strategy--${s.status}`);
   const head = el("div", "strategy__head");
   head.appendChild(el("span", "strategy__title", strategyTitle(s)));
-  const icon = s.status === "ok" ? "✔" : s.status === "not_run" ? "◌" : "⚠";
-  head.appendChild(el("span", "strategy__status", `${icon} ${t(`rescue.status.${s.status}`)}`));
+  const ic = s.status === "ok" ? "ok" : s.status === "not_run" ? "idle" : "warn";
+  head.appendChild(iconEl("span", "strategy__status", ic, t(`rescue.status.${s.status}`), 12));
   card.appendChild(head);
 
   if (s.status === "no_data" || !s.fidelity) {
@@ -396,7 +397,7 @@ function renderRescue(container, result) {
     box.appendChild(el("div", "metric__detail metric__detail--text", rec.message ?? ""));
     if (rec.incomplete) {
       const list = (rec.not_measured ?? []).join(", ");
-      box.appendChild(el("div", "banner banner--warn", `⚠ ${t("rescue.incomplete", { list })}`));
+      box.appendChild(iconEl("div", "banner banner--warn", "warn", t("rescue.incomplete", { list })));
     }
     container.appendChild(box);
   }
@@ -420,14 +421,14 @@ function renderBody(container, result) {
   meta.appendChild(el("div", "meta__line", parts.join(" · ")));
   container.appendChild(meta);
 
-  if (result.cached_run) container.appendChild(el("div", "banner", `ℹ ${t("res.cached")}`));
+  if (result.cached_run) container.appendChild(iconEl("div", "banner", "info", t("res.cached")));
   if (result.params_ignored) {
-    const b = el("div", "banner banner--warn", `⚠ ${t("res.params_ignored")}`);
+    const b = iconEl("div", "banner banner--warn", "warn", t("res.params_ignored"));
     b.appendChild(el("code", "banner__code", JSON.stringify(result.params ?? {})));
     container.appendChild(b);
   }
   if (result.ionq_reduced) {
-    const b = el("div", "banner banner--warn", `⚠ ${t("res.reduced")}`);
+    const b = iconEl("div", "banner banner--warn", "warn", t("res.reduced"));
     const ul = el("ul", "notes");
     for (const n of [].concat(result.ionq_note ?? [])) ul.appendChild(el("li", null, String(n)));
     b.appendChild(ul);
@@ -488,7 +489,10 @@ export function renderResult(container, result) {
     const hasFb = !!(fb && fb.result);
     // With a recorded result on screen this is a neutral notice, not a failure.
     const box = el("div", hasFb || result.code === "previous_pending" ? "banner" : "results__error");
-    box.appendChild(el("strong", null, hasFb ? `ℹ ${t("res.live_unavailable")}` : result.code === "previous_pending" ? "ℹ" : `✖ ${t("res.failed")}`));
+    const head = hasFb
+      ? iconEl("strong", null, "info", t("res.live_unavailable"))
+      : result.code === "previous_pending" ? iconEl("strong", null, "info", "") : iconEl("strong", null, "fail", t("res.failed"));
+    box.appendChild(head);
     const friendly = errorMessage(result);
     if (friendly) box.appendChild(el("p", "results__error-text", friendly));
     const detail = result.error ? t("res.error", { error: result.error }) : t("res.error.generic");
@@ -496,10 +500,11 @@ export function renderResult(container, result) {
     container.appendChild(box);
 
     if (hasFb) {
-      const banner = el(
+      const banner = iconEl(
         "div",
         "banner banner--recorded",
-        `▣ ${t("res.recorded", { backend: fb.backend ?? fb.result.backend ?? "?", timestamp: fb.timestamp ?? fb.result.timestamp ?? "?" })}`,
+        "recorded",
+        t("res.recorded", { backend: fb.backend ?? fb.result.backend ?? "?", timestamp: fb.timestamp ?? fb.result.timestamp ?? "?" }),
       );
       container.appendChild(banner);
       container.appendChild(el("div", "meta__line", t("res.recorded_note")));
@@ -513,13 +518,13 @@ export function renderResult(container, result) {
 }
 
 // "Link BOG-CAL · degraded ⚠ · F = 0.78": the 3D link colour, also as text.
-const STATE_ICON = { healthy: "✔", degraded: "⚠", broken: "✖", damaged: "✖", rescued: "✚" };
+const STATE_ICON = { healthy: "ok", degraded: "warn", broken: "fail", damaged: "fail", rescued: "rescued" };
 export function linkStatusCard({ label, F, status }) {
   const card = el("div", "metric linkstatus");
   const s = hasKey(`state.${status}`) ? t(`state.${status}`) : status;
   card.appendChild(el("div", "metric__name", t("res.link_status", { link: label })));
   card.appendChild(
-    el("div", "metric__value linkstatus__value", `${STATE_ICON[status] ?? ""} ${s}${typeof F === "number" ? ` · ${t("res.f_value", { F: F.toFixed(3) })}` : ""}`),
+    iconEl("div", "metric__value linkstatus__value", STATE_ICON[status] ?? "idle", `${s}${typeof F === "number" ? ` · ${t("res.f_value", { F: F.toFixed(3) })}` : ""}`, 16),
   );
   return card;
 }
