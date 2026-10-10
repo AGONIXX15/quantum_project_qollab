@@ -215,11 +215,34 @@ function onHover(hovered) {
     els.tooltip.style.left = `${hovered.client.x}px`;
     els.tooltip.style.top = `${hovered.client.y}px`;
     document.body.style.cursor = "pointer";
+  } else if (hovered.type === "link") {
+    els.tooltip.replaceChildren(linkRows(hovered.data));
+    els.tooltip.hidden = false;
+    els.tooltip.style.left = `${hovered.client.x}px`;
+    els.tooltip.style.top = `${hovered.client.y}px`;
+    document.body.style.cursor = "help";
   }
 }
 
+// Tooltip rows of a fiber link: lengths (great-circle computed, fibre assumed), eta, last F.
+function linkRows(d) {
+  const frag = document.createDocumentFragment();
+  const add = (cls, text) => {
+    const row = document.createElement("div");
+    row.className = cls;
+    row.textContent = text;
+    frag.appendChild(row);
+  };
+  add("tooltip__title", `${d.from}–${d.to}`);
+  add("tooltip__row", t("tip.link.gc", { km: Math.round(d.great_circle_km) }));
+  if (typeof d.length_km === "number") add("tooltip__row", t("tip.link.fibre", { km: Math.round(d.length_km) }));
+  if (typeof d.eta === "number") add("tooltip__row", t("tip.link.eta", { eta: d.eta.toExponential(2) }));
+  if (typeof d.F === "number") add("tooltip__row", t("tip.link.f", { F: d.F.toFixed(2), status: t(`link.${d.kind}`) }));
+  return frag;
+}
+
 // --- levels / run --------------------------------------------------------------
-function selectLevel(id) {
+function selectLevel(id, { focus = true } = {}) {
   const lvl = levelsById[id];
   if (!lvl) return;
   refreshLevelTexts();
@@ -234,7 +257,7 @@ function selectLevel(id) {
   els.results.appendChild(empty);
   renderExplainer(id, null);
   const linkId = LEVEL_LINK[id];
-  if (linkId && scene) scene.focusLink(linkId);
+  if (focus && linkId && scene) scene.focusLink(linkId);
 }
 
 // Wait one frame so "Running" paints; fall back to a timer if rAF does not fire (hidden tab).
@@ -430,7 +453,7 @@ async function boot() {
   }
   els.levelSelect.addEventListener("change", () => selectLevel(els.levelSelect.value));
   els.runBtn.addEventListener("click", run);
-  selectLevel(infoData.levels[0].id);
+  selectLevel(infoData.levels[0].id, { focus: false }); // keep the opening view of the whole region
   setState("ready");
 
   requestAnimationFrame(() => setTimeout(hideLoader, 350));

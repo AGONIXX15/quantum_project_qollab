@@ -1,20 +1,23 @@
 /*
-  Escena 3D de alta calidad de la red cuántica (three.js + postprocesado).
+  3D scene of the quantum network over the REAL Colombia (three.js + bloom).
 
-  Capas visuales:
-    - Terreno de Colombia con relieve procedural (Andes, Sierra Nevada, llanos),
-      coloreado por altura (selva -> roca -> nieve) y recortado por el contorno
-      real del país. Alrededor, un mar con shader de olas animadas.
-    - Cielo/atmósfera con degradado y niebla para dar profundidad.
-    - Ciudades como nodos luminosos con halo, pilar de luz y etiqueta HTML nítida.
-    - Enlaces de fibra como tubos con shader de flujo de energía, coloreados por
-      fidelidad/estado.
-    - Fotones (pares de Bell) como InstancedMesh: miles a 60fps. Azul = paridad 0
-      (iguales, sano), naranja = paridad 1 (error).
-    - Postprocesado: Bloom (todo lo luminoso resplandece) + tone mapping ACES.
+  Layers:
+    - Terrain: real DEM (AWS Terrain Tiles, land + sea floor) over lon -92..-58,
+      lat -8..16, draped with NASA Blue Marble. Colombia is highlighted (glowing border),
+      its neighbours are dimmed. Data comes from ui/data/*.js (see tools/bake_terrain.py).
+    - Sea: semi-transparent animated surface at 0 m over the bathymetry.
+    - Labels: countries, seas, cordilleras (EN/ES through i18n).
+    - Nodes: cities at their real lat/lon on top of the terrain; the challenge city has
+      a different shape (diamond + octahedron), not only a different colour.
+    - Links: arcs above the terrain with a floating badge "F = 0.95 + status text"
+      (colour is never the only signal; width and dashing also change). Great-circle length
+      is shown on hover or while the link is focused.
+    - Photons: Bell pairs leave the middle of the link towards BOTH ends together, coloured
+      by the parity sample. InstancedMesh: one draw call per link.
+    - FogExp2 hides the far edges of the region; bloom + ACES tone mapping.
 
-  Coordenadas: project() de colombia-geo.js (x este, z sur), igual que el backend.
-  Todo se carga por import map; sin assets binarios, portable a Qollab.
+  One shared projection for everything: terrain.js toScene(lat, lon) = quantum/geo.py project().
+  prefers-reduced-motion -> static render (no waves, pulses, photon flow or camera tween).
 */
 
 import * as THREE from "three";
@@ -25,23 +28,27 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
-import { project, unproject, elevation, insideColombia, OUTLINE } from "./colombia-geo.js";
+import {
+  BBOX, BORDERS, DEM, DEM_W, DEM_H, LON_SPAN, LAT_SPAN, EARTH_SIZE,
+  toScene, elevToUnits, heightAt, haversineKm, paintEarth, loadEarthImage,
+} from "./terrain.js";
+import { t, onLangChange } from "./i18n.js";
 
 const COLORS = {
-  city: 0x2fe0c0,          // turquesa (nodo principal)
-  cityChallenge: 0xffc23d, // ámbar dorado (ciudad reto)
-  linkHealthy: 0x2fe0c0,   // turquesa
-  linkDegraded: 0xf5a623,  // ámbar
-  linkBroken: 0xff5a6e,    // coral
-  linkRescued: 0x7ef29a,   // verde menta
-  photon0: 0x58d8ff,       // paridad 0 (iguales): cian brillante
-  photon1: 0xff7a1a,       // paridad 1 (error): naranja cálido e intenso
+  city: 0x2fe0c0,          // turquoise (main node)
+  cityChallenge: 0xffc23d, // amber (challenge city)
+  linkHealthy: 0x2fe0c0,
+  linkDegraded: 0xf5a623,
+  linkBroken: 0xff5a6e,
+  linkRescued: 0x7ef29a,
+  linkIdle: 0x4f86a8,
+  photon0: 0x58d8ff,       // parity 0 (equal): bright cyan
+  photon1: 0xff7a1a,       // parity 1 (error): intense orange
 };
 
-const WORLD = 6;            // escala del mundo (coords de proyección ~[-1,1])
-const TERRAIN_SPAN = WORLD * 2.6;
-const SEG = 180;            // resolución de la malla del terreno (balance calidad/fps)
-const HEIGHT_SCALE = 0.42;  // km -> unidades de escena
+const FOG_COLOR = 0x1a2338;
+const CLEARANCE = 0.3;     // minimum height of a link above the terrain (scene units)
+const NODE_LIFT = 0.2;     // height of the qubit sphere above the ground
 
 // Same thresholds as the legend: healthy F >= 0.9, degraded 0.6-0.9, broken below.
 export function classifyFidelity(F) {
@@ -51,22 +58,38 @@ export function classifyFidelity(F) {
   return "broken";
 }
 
-function fidelityColor(F, status) {
-  if (status === "broken" || status === "damaged") return COLORS.linkBroken;
-  if (status === "rescued") return COLORS.linkRescued;
-  const c = classifyFidelity(F);
-  return c === "healthy" ? COLORS.linkHealthy : c === "degraded" ? COLORS.linkDegraded : COLORS.linkBroken;
+// "healthy" | "degraded" | "broken" | "rescued" | "idle"
+function statusKind(F, status) {
+  if (status === "broken" || status === "damaged") return "broken";
+  if (status === "rescued") return "rescued";
+  if (F == null) return "idle";
+  return classifyFidelity(F);
 }
 
-// Altura de escena en (x,z) a partir del heightmap procedural.
-function terrainHeight(x, z) {
-  const { lat, lon } = unproject(x / WORLD, z / WORLD);
-  const inside = insideColombia(lat, lon);
-  const e = elevation(lat, lon);
-  // Fuera del país el fondo se hunde bajo el mar (así el borde cuadrado del
-  // plano queda sumergido y no se ve); dentro, el relieve se eleva.
-  return inside ? e * HEIGHT_SCALE : -0.6;
-}
+const KIND_COLOR = {
+  healthy: COLORS.linkHealthy, degraded: COLORS.linkDegraded, broken: COLORS.linkBroken,
+  rescued: COLORS.linkRescued, idle: COLORS.linkIdle,
+};
+const KIND_ICON = { healthy: "✔", degraded: "▲", broken: "✖", rescued: "↻", idle: "○" };
+// Width multiplier and dashing: second and third signals besides colour.
+const KIND_WIDTH = { healthy: 1.0, rescued: 1.0, idle: 0.7, degraded: 0.75, broken: 0.5 };
+
+// Static map labels: [i18n key, css kind, lat, lon, lift above ground (scene units)].
+const GEO_LABELS = [
+  ["geo.colombia", "country colombia", 3.2, -71.6, 0.5],
+  ["geo.panama", "country", 8.6, -80.4, 0.4],
+  ["geo.venezuela", "country", 7.4, -65.8, 0.6],
+  ["geo.ecuador", "country", -1.4, -78.4, 0.6],
+  ["geo.peru", "country", -6.2, -75.8, 0.5],
+  ["geo.brazil", "country", -3.4, -63.0, 0.5],
+  ["geo.caribbean", "ocean", 14.2, -75.6, 0.15],
+  ["geo.pacific", "ocean", 3.0, -85.8, 0.15],
+  ["geo.cord_w", "range", 7.9, -76.7, 0.55],
+  ["geo.cord_c", "range", 1.5, -76.2, 0.85],
+  ["geo.cord_e", "range", 6.9, -72.7, 0.85],
+  ["geo.llanos", "region", 4.4, -70.6, 0.3],
+  ["geo.amazon", "region", -1.6, -70.8, 0.3],
+];
 
 export class NetworkScene {
   constructor(container, labelLayer) {
@@ -74,17 +97,20 @@ export class NetworkScene {
     this.labelLayer = labelLayer;
     this.cities = {};
     this.links = {};
+    this.geoLabels = [];
     this.clock = new THREE.Clock();
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.hoverHandlers = [];
+    this._tween = null;
+    this._activeLinkId = null;
+    this._hoverLinkId = null;
 
-    // prefers-reduced-motion: static render (no photon flow, waves, pulses or auto-rotation).
+    // prefers-reduced-motion: static render (no photon flow, waves, pulses or camera tween).
     this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     this.reducedMotion = !!this._motionQuery?.matches;
     this._motionQuery?.addEventListener?.("change", (e) => {
       this.reducedMotion = e.matches;
-      if (e.matches) this.controls.autoRotate = false;
     });
 
     this._initRenderer();
@@ -94,9 +120,12 @@ export class NetworkScene {
     this._initComposer();
     this._initSky();
     this._buildTerrain();
+    this._buildBorderLine();
     this._buildSea();
+    this._buildGeoLabels();
     this._bindResize();
     this._bindPointer();
+    onLangChange(() => this._retext());
     this._animate();
   }
 
@@ -104,62 +133,56 @@ export class NetworkScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    // Tone mapping + sRGB output are set right after construction.
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMappingExposure = 1.55;
     this.container.appendChild(this.renderer.domElement);
 
-    // Renderer de etiquetas HTML (nítidas, no pixeladas).
+    // Crisp HTML labels (not pixelated).
     this.labelRenderer = new CSS2DRenderer({ element: this.labelLayer });
     this.labelRenderer.setSize(this.container.clientWidth, this.container.clientHeight);
   }
 
   _initScene() {
     this.scene = new THREE.Scene();
-    // Fondo "atardecer andino": azul petróleo profundo, cálido hacia el horizonte.
     this.scene.background = new THREE.Color(0x121a2b);
-    this.scene.fog = new THREE.FogExp2(0x1a2338, 0.022);
+    // Atmospheric fog: Colombia (distance ~18) stays crisp, the far region fades out and
+    // the edges of the data window disappear.
+    this.scene.fog = new THREE.FogExp2(FOG_COLOR, 0.017);
   }
 
   _initCamera() {
-    const aspect = this.container.clientWidth / this.container.clientHeight;
-    this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 200);
-    this.camera.position.set(2.5, 10, 11);
+    const w = this.container.clientWidth || 1;
+    const h = this.container.clientHeight || 1;
+    this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 200);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.07;
-    this.controls.minDistance = 4;
+    this.controls.minDistance = 3.5;
     this.controls.maxDistance = 30;
-    this.controls.maxPolarAngle = Math.PI / 2.05;
-    this.controls.target.set(0, 0.4, 0);
-    this.controls.autoRotate = !this.reducedMotion;
-    this.controls.autoRotateSpeed = 0.25;
-    // Al interactuar, se detiene la rotación automática.
-    this.controls.addEventListener("start", () => (this.controls.autoRotate = false));
+    this.controls.maxPolarAngle = 1.32; // never below the horizon: the map cannot be lost
+    this.controls.minPolarAngle = 0.12;
+    this.controls.screenSpacePanning = false;
+    this.controls.autoRotate = false;
+
+    // Explicit framing before the first render: Colombia in the middle, region around it.
+    this.home = { target: new THREE.Vector3(0, 0, 0.5), position: new THREE.Vector3(0, 13.5, 11.5) };
+    this.camera.position.copy(this.home.position);
+    this.controls.target.copy(this.home.target);
+    this.camera.lookAt(this.controls.target);
+    this.controls.update();
   }
 
   _initLights() {
-    // Cielo malva-durazno, suelo tierra cálida.
-    this.scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x2a1d14, 0.75));
-    // Sol de atardecer: luz dorada rasante (ilumina el relieve lateralmente).
-    const sun = new THREE.DirectionalLight(0xffd9a0, 2.4);
-    sun.position.set(10, 9, 5);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 60;
-    sun.shadow.camera.left = -14;
-    sun.shadow.camera.right = 14;
-    sun.shadow.camera.top = 14;
-    sun.shadow.camera.bottom = -14;
-    sun.shadow.bias = -0.0003;
+    this.scene.add(new THREE.HemisphereLight(0xdbe8ff, 0x3a3024, 1.5));
+    // Low sun from the west-northwest: grazing light makes the N-S cordilleras read.
+    const sun = new THREE.DirectionalLight(0xfff0dc, 2.6);
+    sun.position.set(-11, 6, -4);
     this.scene.add(sun);
-    // Relleno frío desde el lado opuesto (contraluz azulado del cielo).
-    const fill = new THREE.PointLight(0x4e78c8, 0.55, 60);
-    fill.position.set(-9, 7, -9);
+    const fill = new THREE.DirectionalLight(0x5f86d8, 0.5);
+    fill.position.set(9, 5, 8);
     this.scene.add(fill);
   }
 
@@ -167,21 +190,18 @@ export class NetworkScene {
     const size = new THREE.Vector2(this.container.clientWidth, this.container.clientHeight);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    // strength bajo + threshold alto: solo lo MUY brillante (fotones, núcleos
-    // pequeños) resplandece, sin lavar el centro del mapa.
-    this.bloom = new UnrealBloomPass(size, 0.42, 0.65, 0.85);
+    // Low strength + high threshold: only photons, nodes and the border glow.
+    this.bloom = new UnrealBloomPass(size, 0.4, 0.6, 0.92);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
   }
 
-  // Cielo: domo con degradado vertical por shader.
+  // Sky: dome with a vertical gradient.
   _initSky() {
-    // Degradado de atardecer en tres zonas: cenit azul profundo, cielo medio
-    // malva, horizonte durazno cálido.
     const uniforms = {
       zenith: { value: new THREE.Color(0x14213f) },
-      mid: { value: new THREE.Color(0x3b3a63) },
-      horizon: { value: new THREE.Color(0xd98b63) },
+      mid: { value: new THREE.Color(0x242d4d) },
+      horizon: { value: new THREE.Color(0x2c3856) },
     };
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(90, 32, 20),
@@ -189,6 +209,7 @@ export class NetworkScene {
         uniforms,
         side: THREE.BackSide,
         depthWrite: false,
+        fog: false,
         vertexShader: `
           varying vec3 vWorld;
           void main() {
@@ -200,9 +221,8 @@ export class NetworkScene {
           uniform vec3 zenith; uniform vec3 mid; uniform vec3 horizon;
           varying vec3 vWorld;
           void main() {
-            float h = normalize(vWorld).y;         // -1..1
+            float h = normalize(vWorld).y;
             float t = clamp(h, 0.0, 1.0);
-            // Horizonte -> medio en la primera mitad, medio -> cenit en la segunda.
             vec3 col = (t < 0.4)
               ? mix(horizon, mid, smoothstep(0.0, 0.4, t))
               : mix(mid, zenith, smoothstep(0.4, 1.0, t));
@@ -213,316 +233,358 @@ export class NetworkScene {
     this.scene.add(sky);
   }
 
-  // Terreno de Colombia: malla deformada por el heightmap, coloreada como un
-  // mapa físico (color por ALTURA y PENDIENTE) para que se vea realista.
+  // Real DEM mesh (one vertex per DEM cell, ~185k vertices) with the Blue Marble draped.
   _buildTerrain() {
-    const geo = new THREE.PlaneGeometry(TERRAIN_SPAN, TERRAIN_SPAN, SEG, SEG);
-    geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position;
-
-    // Paleta tipo mapa físico (de bajo a alto).
-    const cCoast = new THREE.Color(0x3a5a3a);  // verde costa/húmedo
-    const cJungle = new THREE.Color(0x2f6b3a); // selva
-    const cPlain = new THREE.Color(0x5c7f3e);  // planicie / sabana
-    const cFoot = new THREE.Color(0x8a7d45);   // piedemonte ocre
-    const cRock = new THREE.Color(0x7d6b55);   // roca
-    const cHigh = new THREE.Color(0x9a9282);   // alta montaña
-    const cSnow = new THREE.Color(0xf4f6fb);   // nieve
-    const cSlope = new THREE.Color(0x5c4e3a);  // laderas empinadas (tierra/roca)
-    const maxH = 3.6 * HEIGHT_SCALE;
-
-    // Alturas en una grilla para calcular pendiente por diferencias finitas.
-    const span = TERRAIN_SPAN;
-    const nx = SEG + 1;
-    const h = (ix, iz) => {
-      const x = -span / 2 + (span * ix) / SEG;
-      const z = -span / 2 + (span * iz) / SEG;
-      return terrainHeight(x, z);
-    };
-
-    const colors = new Float32Array(pos.count * 3);
-    const tmp = new THREE.Color();
-    const cell = span / SEG;
-    for (let iz = 0; iz <= SEG; iz++) {
-      for (let ix = 0; ix <= SEG; ix++) {
-        const i = iz * nx + ix;
-        const H = h(ix, iz);
-        pos.setY(i, H);
-
-        if (H <= 0.001) {
-          // Franja costera (bajo nivel del mar o justo en la orilla).
-          tmp.copy(cCoast);
-        } else {
-          // Pendiente: magnitud del gradiente de altura.
-          const hx = h(Math.min(ix + 1, SEG), iz) - h(Math.max(ix - 1, 0), iz);
-          const hz = h(ix, Math.min(iz + 1, SEG)) - h(ix, Math.max(iz - 1, 0));
-          const slope = Math.min(1, Math.hypot(hx, hz) / (cell * 2.2));
-
-          const t = Math.min(1, H / maxH);
-          // Color base por altura.
-          if (t < 0.1) tmp.copy(cJungle).lerp(cPlain, t / 0.1);
-          else if (t < 0.35) tmp.copy(cPlain).lerp(cFoot, (t - 0.1) / 0.25);
-          else if (t < 0.6) tmp.copy(cFoot).lerp(cRock, (t - 0.35) / 0.25);
-          else if (t < 0.82) tmp.copy(cRock).lerp(cHigh, (t - 0.6) / 0.22);
-          else tmp.copy(cHigh).lerp(cSnow, (t - 0.82) / 0.18);
-
-          // Laderas empinadas: tierra/roca expuesta (menos vegetación, sin nieve).
-          const slopeMix = slope * (t < 0.82 ? 0.75 : 0.35);
-          tmp.lerp(cSlope, slopeMix);
-          // Variación sutil para romper lo uniforme.
-          const n = (Math.sin(ix * 0.7) * Math.cos(iz * 0.6)) * 0.03;
-          tmp.offsetHSL(0, 0, n);
-        }
-        colors[i * 3] = tmp.r;
-        colors[i * 3 + 1] = tmp.g;
-        colors[i * 3 + 2] = tmp.b;
+    const W = DEM_W, H = DEM_H;
+    const pos = new Float32Array(W * H * 3);
+    const uv = new Float32Array(W * H * 2);
+    for (let j = 0; j < H; j++) {
+      const lat = BBOX.north - ((j + 0.5) / H) * LAT_SPAN;
+      for (let i = 0; i < W; i++) {
+        const lon = BBOX.west + ((i + 0.5) / W) * LON_SPAN;
+        const p = toScene(lat, lon);
+        const k = j * W + i;
+        pos[3 * k] = p.x;
+        pos[3 * k + 1] = elevToUnits(DEM[k]);
+        pos[3 * k + 2] = p.z;
+        uv[2 * k] = (i + 0.5) / W;
+        uv[2 * k + 1] = 1 - (j + 0.5) / H;
       }
     }
-    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const idx = new Uint32Array((W - 1) * (H - 1) * 6);
+    let n = 0;
+    for (let j = 0; j < H - 1; j++) {
+      for (let i = 0; i < W - 1; i++) {
+        const a = j * W + i, b = a + 1, c = a + W, d = c + 1;
+        idx[n++] = a; idx[n++] = c; idx[n++] = b;
+        idx[n++] = b; idx[n++] = c; idx[n++] = d;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
     geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    this.terrainVertices = W * H;
 
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 1.0,
-      metalness: 0.0,
+    // Texture: elevation ramp first (fallback), Blue Marble once it decodes.
+    const canvas = document.createElement("canvas");
+    canvas.width = EARTH_SIZE.w;
+    canvas.height = EARTH_SIZE.h;
+    paintEarth(canvas, null);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    loadEarthImage().then((img) => {
+      if (!img) return; // keep the elevation-ramp texture
+      paintEarth(canvas, img);
+      tex.needsUpdate = true;
     });
-    this.terrain = new THREE.Mesh(geo, mat);
-    this.terrain.receiveShadow = true;
+
+    this.terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
     this.scene.add(this.terrain);
-
-    // Línea de costa/frontera, discreta y cálida (no neón).
-    const outlinePts = OUTLINE.map(([lat, lon]) => {
-      const p = project(lat, lon);
-      return new THREE.Vector3(p.x * WORLD, 0.04, p.z * WORLD);
-    });
-    const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePts);
-    const outline = new THREE.Line(
-      outlineGeo,
-      new THREE.LineBasicMaterial({ color: 0xf0e2c8, transparent: true, opacity: 0.35 })
-    );
-    this.scene.add(outline);
   }
 
-  // Mar sobrio: olas de baja amplitud, color por profundidad, reflejo del cielo
-  // (fresnel) y brillo especular del sol. Sin espuma exagerada.
+  // Colombia border draped over the terrain (thin line; the glowing stroke is in the texture).
+  _buildBorderLine() {
+    const pts = [];
+    for (const ring of BORDERS.colombia) {
+      const segs = [];
+      for (let i = 0; i < ring.length; i++) {
+        const [lon0, lat0] = ring[i];
+        const [lon1, lat1] = ring[(i + 1) % ring.length];
+        const steps = Math.max(1, Math.ceil(Math.hypot(lon1 - lon0, lat1 - lat0) / 0.05));
+        for (let s = 0; s < steps; s++) {
+          const f = s / steps;
+          const p = toScene(lat0 + (lat1 - lat0) * f, lon0 + (lon1 - lon0) * f);
+          const y = Math.max(0.004, heightAt(p.x, p.z)) + 0.02;
+          segs.push(new THREE.Vector3(p.x, y, p.z));
+        }
+      }
+      pts.push(...segs.flatMap((v, i) => [v, segs[(i + 1) % segs.length]]));
+    }
+    const line = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xb8fff0, transparent: true, opacity: 0.9 })
+    );
+    this.scene.add(line);
+  }
+
+  // Sea surface at 0 m: transparent, so the bathymetry shows through.
   _buildSea() {
+    const w = toScene(0, BBOX.west), e = toScene(0, BBOX.east);
+    const n = toScene(BBOX.north, 0), s = toScene(BBOX.south, 0);
+    const sx = e.x - w.x, sz = s.z - n.z;
     this.seaUniforms = {
       time: { value: 0 },
-      colorDeep: { value: new THREE.Color(0x0a2238) },
-      colorShallow: { value: new THREE.Color(0x1d4a63) },
-      skyTint: { value: new THREE.Color(0xd98b63) }, // reflejo cálido del horizonte
-      sunDir: { value: new THREE.Vector3(10, 9, 5).normalize() },
+      sunDir: { value: new THREE.Vector3(-11, 6, -4).normalize() },
     };
+    const geo = new THREE.PlaneGeometry(sx, sz, 160, 112);
+    geo.rotateX(-Math.PI / 2);
     const sea = new THREE.Mesh(
-      new THREE.PlaneGeometry(220, 220, 128, 128),
+      geo,
       new THREE.ShaderMaterial({
         uniforms: this.seaUniforms,
         transparent: true,
+        depthWrite: false,
         vertexShader: `
-          uniform float time;
-          varying float vWave;
           varying vec3 vWorld;
+          varying vec2 vUv;
           void main() {
-            vec3 p = position;
-            // Olas suaves (amplitud pequeña) combinando varias frecuencias.
-            float w = sin(p.x * 0.5 + time * 0.6) * 0.012
-                    + cos(p.y * 0.65 + time * 0.5) * 0.010
-                    + sin((p.x * 0.9 + p.y * 0.7) + time * 0.35) * 0.008;
-            p.z += w;
-            vWave = w;
-            vec4 wp = modelMatrix * vec4(p, 1.0);
+            vUv = uv;
+            vec4 wp = modelMatrix * vec4(position, 1.0);
             vWorld = wp.xyz;
             gl_Position = projectionMatrix * viewMatrix * wp;
           }`,
         fragmentShader: `
-          uniform vec3 colorDeep; uniform vec3 colorShallow; uniform vec3 skyTint;
           uniform vec3 sunDir; uniform float time;
-          varying float vWave;
           varying vec3 vWorld;
+          varying vec2 vUv;
           void main() {
-            // Normal aproximada de la ola para iluminación.
-            float nx = cos(vWorld.x * 0.5 + time * 0.6) * 0.5;
-            float nz = -sin(vWorld.z * 0.65 + time * 0.5) * 0.5;
-            vec3 n = normalize(vec3(nx, 1.0, nz));
-            vec3 viewDir = normalize(cameraPosition - vWorld);
-            // Fresnel: a vista rasante refleja el cielo cálido.
-            float fres = pow(1.0 - max(dot(viewDir, n), 0.0), 3.0);
-            vec3 base = mix(colorDeep, colorShallow, smoothstep(-0.015, 0.015, vWave));
-            vec3 col = mix(base, skyTint, fres * 0.6);
-            // Especular suave del sol (reflejo del atardecer en el agua).
-            vec3 h = normalize(viewDir + normalize(sunDir));
-            float spec = pow(max(dot(n, h), 0.0), 60.0);
-            col += vec3(1.0, 0.85, 0.6) * spec * 0.5;
-            gl_FragColor = vec4(col, 0.95);
+            // Analytic wave normal (static when time = 0).
+            vec2 p = vWorld.xz;
+            float dx = cos(p.x * 1.7 + time * 0.7) * 0.06 + cos((p.x + p.y) * 2.6 - time * 0.9) * 0.04;
+            float dz = cos(p.y * 2.1 + time * 0.6) * 0.06 + cos((p.x - p.y) * 3.1 + time * 0.8) * 0.04;
+            vec3 n = normalize(vec3(-dx, 1.0, -dz));
+            vec3 v = normalize(cameraPosition - vWorld);
+            float fres = pow(1.0 - max(dot(v, n), 0.0), 3.0);
+            vec3 col = vec3(0.02, 0.12, 0.22);
+            col = mix(col, vec3(0.45, 0.28, 0.2), fres * 0.55);
+            vec3 h = normalize(v + normalize(sunDir));
+            col += vec3(1.0, 0.85, 0.65) * pow(max(dot(n, h), 0.0), 90.0) * 0.55;
+            float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+            float a = (0.3 + 0.35 * fres) * smoothstep(0.0, 0.07, edge);
+            gl_FragColor = vec4(col, a);
           }`,
       })
     );
-    sea.rotation.x = -Math.PI / 2;
-    sea.position.y = -0.06;
+    sea.position.set((w.x + e.x) / 2, 0.006, (n.z + s.z) / 2);
+    sea.renderOrder = 1;
     this.scene.add(sea);
   }
 
-  _toWorld(x, z, y = 0) {
-    return new THREE.Vector3(x * WORLD, y, z * WORLD);
+  _buildGeoLabels() {
+    for (const [key, kind, lat, lon, lift] of GEO_LABELS) {
+      const el = document.createElement("div");
+      el.className = "geo-label " + kind.split(" ").map((k) => `geo-label--${k}`).join(" ");
+      const label = new CSS2DObject(el);
+      const p = toScene(lat, lon);
+      label.position.set(p.x, Math.max(0, heightAt(p.x, p.z)) + lift, p.z);
+      this.scene.add(label);
+      this.geoLabels.push({ key, el });
+    }
+    this._retext();
   }
 
-  // --- Construcción desde la geografía del backend -------------------------
+  // Re-render every translatable text of the scene (language change).
+  _retext() {
+    for (const g of this.geoLabels) g.el.textContent = t(g.key);
+    for (const l of Object.values(this.links)) this._renderLinkLabel(l);
+  }
+
+  // --- Construction from the backend geography ------------------------------
   buildFromGeo(geo) {
-    for (const [id, c] of Object.entries(geo.cities)) {
-      this._buildCity(id, c);
-    }
-    for (const link of geo.links) {
-      this._buildLink(link.id, link.a, link.b);
-    }
-  }
-
-  _cityWorldPos(c) {
-    // Altura del terreno en la ciudad + un pequeño offset para apoyar el nodo.
-    const wx = c.x * WORLD;
-    const wz = c.z * WORLD;
-    const h = Math.max(0.05, terrainHeight(wx, wz));
-    return new THREE.Vector3(wx, h, wz);
+    for (const [id, c] of Object.entries(geo.cities)) this._buildCity(id, c);
+    for (const link of geo.links) this._buildLink(link);
+    this._retext();
   }
 
   _buildCity(id, c) {
-    const pos = this._cityWorldPos(c);
-    const color = c.challenge ? COLORS.cityChallenge : COLORS.city;
+    const p = toScene(c.lat, c.lon); // same projection as the terrain
+    const ground = Math.max(0, heightAt(p.x, p.z)) + 0.02;
+    const pos = new THREE.Vector3(p.x, ground, p.z);
+    const challenge = !!c.challenge;
+    const color = challenge ? COLORS.cityChallenge : COLORS.city;
     const group = new THREE.Group();
     group.position.copy(pos);
 
-    const core = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.1, 2),
-      new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: 0.75,
-        roughness: 0.35,
-        metalness: 0.1,
-      })
+    const additive = { color, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending };
+    // Glowing base ring (diamond for the challenge city) + pulsing outer ring.
+    const base = new THREE.Mesh(
+      challenge ? new THREE.RingGeometry(0.19, 0.27, 4) : new THREE.RingGeometry(0.16, 0.22, 48),
+      new THREE.MeshBasicMaterial({ ...additive, opacity: 0.95 })
     );
-    core.castShadow = true;
+    base.rotation.x = -Math.PI / 2;
+    if (challenge) base.rotation.z = Math.PI / 4;
+    base.position.y = 0.01;
+    group.add(base);
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(0.16, 40),
+      new THREE.MeshBasicMaterial({ ...additive, opacity: 0.2 })
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.008;
+    group.add(disc);
+    const pulse = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.315, 64),
+      new THREE.MeshBasicMaterial({ ...additive, opacity: 0.4 })
+    );
+    pulse.rotation.x = -Math.PI / 2;
+    pulse.position.y = 0.012;
+    group.add(pulse);
+
+    // Thin pillar + the qubit itself (sphere; octahedron for the challenge city).
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.008, NODE_LIFT, 6),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false })
+    );
+    pillar.position.y = NODE_LIFT / 2;
+    group.add(pillar);
+    const core = new THREE.Mesh(
+      challenge ? new THREE.OctahedronGeometry(0.11, 0) : new THREE.IcosahedronGeometry(0.08, 2),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.3, metalness: 0.1 })
+    );
+    core.position.y = NODE_LIFT;
     group.add(core);
 
-    const halo = new THREE.Mesh(
-      new THREE.SphereGeometry(0.17, 24, 24),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, depthWrite: false })
-    );
-    group.add(halo);
+    // Generous invisible hit target for hover.
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    hit.position.y = 0.12;
+    group.add(hit);
 
-    // Anillo plano en la base (plataforma).
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.16, 0.21, 48),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = -0.08;
-    group.add(ring);
-
-    // Pilar de luz, fino y tenue (solo una pista vertical, no un foco).
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.009, 0.009, 2.2, 8),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, depthWrite: false })
-    );
-    beam.position.y = 1.1;
-    group.add(beam);
-
-    // Etiqueta HTML nítida.
     const el = document.createElement("div");
-    el.className = "city-label" + (c.challenge ? " city-label--challenge" : "");
-    el.textContent = c.name;
+    el.className = "city-label" + (challenge ? " city-label--challenge" : "");
+    el.textContent = (challenge ? "◆ " : "") + c.name;
     const label = new CSS2DObject(el);
-    label.position.set(0, 0.5, 0);
+    label.position.set(0, 0.55, 0);
     group.add(label);
 
     this.scene.add(group);
-    this.cities[id] = { group, halo, core, pos, data: c, color };
+    this.cities[id] = { group, core, hit, pulse, pos, data: c, color };
   }
 
-  _buildLink(id, aId, bId) {
-    const a = this.cities[aId]?.pos;
-    const b = this.cities[bId]?.pos;
-    if (!a || !b) return;
+  _buildLink(linkData) {
+    const { id, a: aId, b: bId } = linkData;
+    const ca = this.cities[aId], cb = this.cities[bId];
+    if (!ca || !cb) return;
+    const a = ca.pos.clone().add(new THREE.Vector3(0, NODE_LIFT, 0));
+    const b = cb.pos.clone().add(new THREE.Vector3(0, NODE_LIFT, 0));
 
-    // Curva que se arquea sobre el relieve (varios puntos de control siguiendo
-    // el terreno, elevados para no atravesar montañas).
-    const pts = [];
-    const N = 24;
+    // Arc: a lifted line between the nodes that always clears the terrain underneath.
+    const N = 48;
+    const dist = a.distanceTo(b);
+    const xs = [], zs = [], ys = [], ground = [];
     for (let i = 0; i <= N; i++) {
-      const t = i / N;
-      const x = THREE.MathUtils.lerp(a.x, b.x, t);
-      const z = THREE.MathUtils.lerp(a.z, b.z, t);
-      const ground = Math.max(0, terrainHeight(x, z));
-      const arc = Math.sin(Math.PI * t) * a.distanceTo(b) * 0.14;
-      pts.push(new THREE.Vector3(x, ground + 0.18 + arc, z));
+      const f = i / N;
+      const x = THREE.MathUtils.lerp(a.x, b.x, f), z = THREE.MathUtils.lerp(a.z, b.z, f);
+      xs.push(x); zs.push(z);
+      ground.push(Math.max(0, heightAt(x, z)));
+      ys.push(THREE.MathUtils.lerp(a.y, b.y, f) + Math.sin(Math.PI * f) * dist * 0.1);
     }
-    const curve = new THREE.CatmullRomCurve3(pts);
+    for (let pass = 0; pass < 4; pass++) { // lift over ridges, then smooth
+      for (let i = 1; i < N; i++) ys[i] = Math.max(ys[i], ground[i] + CLEARANCE);
+      const prev = ys.slice();
+      for (let i = 1; i < N; i++) ys[i] = (prev[i - 1] + 2 * prev[i] + prev[i + 1]) / 4;
+    }
+    for (let i = 1; i < N; i++) ys[i] = Math.max(ys[i], ground[i] + CLEARANCE * 0.8);
+    const curve = new THREE.CatmullRomCurve3(xs.map((x, i) => new THREE.Vector3(x, ys[i], zs[i])));
 
     const uniforms = {
       time: { value: 0 },
-      color: { value: new THREE.Color(COLORS.linkHealthy) },
+      color: { value: new THREE.Color(COLORS.linkIdle) },
       intensity: { value: 1.0 },
       flow: { value: 1.0 },
+      width: { value: KIND_WIDTH.idle },
+      dashed: { value: 0 },
     };
-    const tubeGeo = new THREE.TubeGeometry(curve, 80, 0.03, 10, false);
+    const R = 0.045;
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
       vertexShader: `
+        uniform float width;
         varying vec2 vUv;
         void main() {
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec3 p = position + normal * ${R.toFixed(3)} * (width - 1.0);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: `
-        uniform float time; uniform vec3 color; uniform float intensity; uniform float flow;
+        uniform float time; uniform vec3 color; uniform float intensity; uniform float flow; uniform float dashed;
         varying vec2 vUv;
         void main() {
-          // Pulsos de energía viajando a lo largo del tubo (vUv.x).
-          float pulse = sin((vUv.x * 18.0 - time * flow * 3.0)) * 0.5 + 0.5;
-          pulse = pow(pulse, 2.5);
+          if (dashed > 0.5 && fract(vUv.x * 40.0) > 0.55) discard;
+          float pulse = pow(sin(vUv.x * 18.0 - time * flow * 3.0) * 0.5 + 0.5, 2.5);
           float core = 0.45 + 0.55 * pulse;
-          vec3 col = color * (0.6 + 0.9 * core) * intensity;
-          gl_FragColor = vec4(col, 0.55 + 0.4 * core);
+          gl_FragColor = vec4(color * (0.3 + 0.4 * core) * intensity, 0.7 + 0.3 * core);
         }`,
     });
-    const tube = new THREE.Mesh(tubeGeo, mat);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, R, 8, false), mat);
     this.scene.add(tube);
 
-    this.links[id] = { tube, uniforms, curve, F: null, status: "healthy", photons: null, a: aId, b: bId };
+    const hit = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.14, 5, false), new THREE.MeshBasicMaterial({ visible: false }));
+    this.scene.add(hit);
+
+    // Pair source in the middle of the link (visual).
+    const mid = curve.getPointAt(0.5);
+    const src = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    src.position.copy(mid);
+    this.scene.add(src);
+
+    // Floating badge: F value + status text (+ great-circle km while hovered/focused).
+    const el = document.createElement("div");
+    el.className = "link-label";
+    const fEl = document.createElement("div"); fEl.className = "link-label__f";
+    const sEl = document.createElement("div"); sEl.className = "link-label__status";
+    const kEl = document.createElement("div"); kEl.className = "link-label__km";
+    el.append(fEl, sEl, kEl);
+    const label = new CSS2DObject(el);
+    // Push the badge outwards from the centre of the main triangle so the three badges
+    // do not pile up on top of each other (the cities are only ~1 unit apart).
+    const main = Object.values(this.cities).filter((c) => !c.data.challenge);
+    const cen = main.reduce((acc, c) => acc.add(c.pos), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, main.length));
+    const out = new THREE.Vector3(mid.x - cen.x, 0, mid.z - cen.z);
+    if (out.lengthSq() > 1e-6) out.normalize().multiplyScalar(1.0);
+    label.position.copy(mid).add(out).add(new THREE.Vector3(0, 0.15, 0));
+    this.scene.add(label);
+
+    const km = haversineKm(ca.data.lat, ca.data.lon, cb.data.lat, cb.data.lon);
+    this.links[id] = {
+      id, tube, hit, src, uniforms, curve, a: aId, b: bId, km, geo: linkData,
+      F: null, status: null, photons: null, el, fEl, sEl, kEl,
+    };
+    this._renderLinkLabel(this.links[id]);
   }
 
-  // --- Estado de enlaces desde viz.links -----------------------------------
+  _renderLinkLabel(l) {
+    const kind = statusKind(l.F, l.status);
+    l.fEl.textContent = l.F == null ? "F = —" : `F = ${l.F.toFixed(2)}`;
+    l.sEl.textContent = `${KIND_ICON[kind]} ${t(`link.${kind}`)}`;
+    l.kEl.textContent = t("link.km", { km: Math.round(l.km) });
+    l.el.style.setProperty("--lk", "#" + KIND_COLOR[kind].toString(16).padStart(6, "0"));
+  }
+
+  _applyKind(l) {
+    const kind = statusKind(l.F, l.status);
+    l.uniforms.color.value.setHex(KIND_COLOR[kind]);
+    l.uniforms.width.value = KIND_WIDTH[kind];
+    l.uniforms.dashed.value = kind === "broken" ? 1 : 0;
+    const f = l.F ?? 0.8;
+    l.uniforms.intensity.value = 0.6 + 0.9 * f;
+    l.uniforms.flow.value = 0.4 + 1.0 * f;
+    this._renderLinkLabel(l);
+  }
+
+  // --- Link states from viz.links ----------------------------------------------
   setLinkStates(vizLinks) {
     if (!vizLinks) return;
     for (const [id, state] of Object.entries(vizLinks)) {
       const link = this.links[id];
       if (!link) continue;
-      const color = fidelityColor(state.F, state.status);
-      link.uniforms.color.value.setHex(color);
       link.F = state.F ?? null;
-      link.status = state.status ?? "healthy";
-      const f = state.F ?? 1;
-      link.uniforms.intensity.value = 0.6 + 0.9 * f;
-      // Enlaces malos: flujo más lento y errático.
-      link.uniforms.flow.value = 0.4 + 1.0 * f;
+      link.status = state.status ?? null;
+      this._applyKind(link);
     }
   }
 
-  // --- Fotones instanciados -------------------------------------------------
-  // InstancedMesh con un ShaderMaterial que lee `instanceColor` por instancia y
-  // añade un glow radial. Los colores van en HDR (>1) para que el bloom haga que
-  // tanto el cian como el naranja brillen de verdad (antes salían apagados/negros
-  // porque un MeshBasicMaterial con vertexColors no usa instanceColor).
+  // --- Photons: Bell pairs leave the middle of the link towards both ends ---------
   emitPhotons(linkId, samples) {
     const link = this.links[linkId];
     if (!link || !samples?.length) return;
-    if (link.photons) {
-      this.scene.remove(link.photons.mesh);
-      link.photons.mesh.geometry.dispose();
-      link.photons.mesh.material.dispose();
-    }
-    const n = Math.min(samples.length, 60);
-    const geo = new THREE.SphereGeometry(0.07, 16, 16);
+    this._disposePhotons(link);
+    const pairs = Math.min(samples.length, 24);
+    const geo = new THREE.SphereGeometry(0.05, 14, 14);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -544,74 +606,159 @@ export class NetworkScene {
         varying vec3 vNormalV;
         varying vec3 vViewDir;
         void main() {
-          // Núcleo brillante + borde (fresnel) que irradia -> glow para el bloom.
           float facing = max(dot(normalize(vNormalV), normalize(vViewDir)), 0.0);
           float core = pow(facing, 1.2);
           float rim = pow(1.0 - facing, 2.0);
-          vec3 col = vColor * (0.9 + 1.6 * core) + vColor * rim * 1.2;
-          float alpha = clamp(core + rim * 0.8, 0.0, 1.0);
-          gl_FragColor = vec4(col, alpha);
+          vec3 col = vColor * (0.5 + 0.5 * core) + vColor * rim * 0.4;
+          gl_FragColor = vec4(col, clamp(core + rim * 0.8, 0.0, 1.0));
         }`,
     });
-    const mesh = new THREE.InstancedMesh(geo, mat, n);
+    const mesh = new THREE.InstancedMesh(geo, mat, pairs * 2);
     mesh.frustumCulled = false;
-    // Atributo de color por instancia que el shader lee directamente.
-    const colorArr = new Float32Array(n * 3);
-    const c0 = new THREE.Color(COLORS.photon0);
-    const c1 = new THREE.Color(COLORS.photon1);
+    const colorArr = new Float32Array(pairs * 6);
+    const c0 = new THREE.Color(COLORS.photon0), c1 = new THREE.Color(COLORS.photon1);
     const data = [];
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < pairs; i++) {
       const bit = samples[i] & 1;
       const col = bit === 1 ? c1 : c0;
-      colorArr[i * 3] = col.r;
-      colorArr[i * 3 + 1] = col.g;
-      colorArr[i * 3 + 2] = col.b;
-      data.push({ t: i / n, speed: 0.12 + Math.random() * 0.05, bit });
+      // Both members of a pair share the colour (same parity sample).
+      for (const k of [2 * i, 2 * i + 1]) {
+        colorArr[3 * k] = col.r; colorArr[3 * k + 1] = col.g; colorArr[3 * k + 2] = col.b;
+      }
+      data.push({ phase: i / pairs, speed: 0.16 + (i % 5) * 0.012 });
     }
     geo.setAttribute("instanceColor", new THREE.InstancedBufferAttribute(colorArr, 3));
     this.scene.add(mesh);
     link.photons = { mesh, data, curve: link.curve };
+    this._placePhotons(link, 0); // visible immediately, also when motion is reduced
+  }
+
+  _placePhotons(link, time) {
+    const ph = link.photons;
+    if (!ph) return;
+    const dummy = this._dummy ?? (this._dummy = new THREE.Object3D());
+    for (let i = 0; i < ph.data.length; i++) {
+      const p = ph.data[i];
+      const s = (p.phase + p.speed * time) % 1; // 0 at the source, 1 at the ends
+      const sc = 0.35 + 0.65 * Math.sin(Math.PI * s);
+      dummy.scale.setScalar(sc);
+      dummy.position.copy(ph.curve.getPointAt(0.5 - 0.5 * s));
+      dummy.updateMatrix();
+      ph.mesh.setMatrixAt(2 * i, dummy.matrix);
+      dummy.position.copy(ph.curve.getPointAt(0.5 + 0.5 * s));
+      dummy.updateMatrix();
+      ph.mesh.setMatrixAt(2 * i + 1, dummy.matrix);
+    }
+    ph.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  _disposePhotons(link) {
+    if (!link.photons) return;
+    this.scene.remove(link.photons.mesh);
+    link.photons.mesh.geometry.dispose();
+    link.photons.mesh.material.dispose();
+    link.photons = null;
   }
 
   // Back to the neutral state before drawing a new result.
   resetLinks() {
     for (const link of Object.values(this.links)) {
-      link.uniforms.color.value.setHex(COLORS.linkHealthy);
-      link.uniforms.intensity.value = 1.0;
-      link.uniforms.flow.value = 1.0;
       link.F = null;
-      link.status = "healthy";
+      link.status = null;
+      this._applyKind(link);
     }
+    this._activeLinkId = null;
+    this._syncLinkActive();
   }
 
   clearPhotons() {
-    for (const link of Object.values(this.links)) {
-      if (!link.photons) continue;
-      this.scene.remove(link.photons.mesh);
-      link.photons.mesh.geometry.dispose();
-      link.photons.mesh.material.dispose();
-      link.photons = null;
+    for (const link of Object.values(this.links)) this._disposePhotons(link);
+  }
+
+  // --- Camera -------------------------------------------------------------------
+  // Scripted move: OrbitControls is disabled while it runs so it completes, then re-enabled.
+  _flyTo(target, dist, polar = 0.85) {
+    const off = this.camera.position.clone().sub(this.controls.target);
+    const az = Math.atan2(off.x, off.z);
+    const toPos = new THREE.Vector3(
+      target.x + dist * Math.sin(polar) * Math.sin(az),
+      target.y + dist * Math.cos(polar),
+      target.z + dist * Math.sin(polar) * Math.cos(az)
+    );
+    this._moveCamera(target.clone(), toPos);
+  }
+
+  _moveCamera(toTarget, toPos) {
+    if (this.reducedMotion) {
+      this._tween = null;
+      this.controls.enabled = true;
+      this.controls.target.copy(toTarget);
+      this.camera.position.copy(toPos);
+      this.camera.lookAt(toTarget);
+      this.controls.update();
+      return;
+    }
+    this._tween = {
+      t0: performance.now(), dur: 1100,
+      fromT: this.controls.target.clone(), toT: toTarget,
+      fromP: this.camera.position.clone(), toP: toPos,
+    };
+    this.controls.enabled = false;
+  }
+
+  _stepTween() {
+    const tw = this._tween;
+    if (!tw) return;
+    const u = Math.min(1, (performance.now() - tw.t0) / tw.dur);
+    const e = u * u * u * (u * (u * 6 - 15) + 10); // smootherstep
+    this.controls.target.lerpVectors(tw.fromT, tw.toT, e);
+    this.camera.position.lerpVectors(tw.fromP, tw.toP, e);
+    if (u >= 1) {
+      this._tween = null;
+      this.controls.enabled = true;
     }
   }
 
-  // Keyboard / list access: look at a city.
   focusCity(cityId) {
     const c = this.cities[cityId];
     if (!c) return;
-    this.controls.target.lerp(c.pos, 0.6);
+    this._flyTo(c.pos, 7);
+  }
+
+  focusLink(linkId) {
+    const link = this.links[linkId];
+    if (!link) return;
+    const mid = link.curve.getPointAt(0.5);
+    const target = new THREE.Vector3(mid.x, Math.max(0, mid.y - 0.5), mid.z);
+    this._flyTo(target, THREE.MathUtils.clamp(4.5 + link.curve.getLength() * 1.6, 7, 13));
+  }
+
+  resetCamera() {
+    this._moveCamera(this.home.target.clone(), this.home.position.clone());
   }
 
   highlightLink(linkId) {
-    this.activeLink = linkId;
+    this._activeLinkId = linkId;
+    this._syncLinkActive();
   }
 
-  // --- Interacción (hover para tooltips) -----------------------------------
+  _syncLinkActive() {
+    for (const l of Object.values(this.links)) {
+      l.el.classList.toggle("is-active", l.id === this._activeLinkId || l.id === this._hoverLinkId);
+    }
+  }
+
+  // --- Pointer / hover ----------------------------------------------------------
   _bindPointer() {
-    this.renderer.domElement.addEventListener("pointermove", (e) => {
-      const rect = this.renderer.domElement.getBoundingClientRect();
+    const el = this.renderer.domElement;
+    el.addEventListener("pointermove", (e) => {
+      const rect = el.getBoundingClientRect();
       this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       this._lastPointerClient = { x: e.clientX, y: e.clientY };
+    });
+    el.addEventListener("pointerleave", () => {
+      this._lastPointerClient = null;
     });
   }
 
@@ -620,22 +767,43 @@ export class NetworkScene {
   }
 
   _checkHover() {
-    if (!this._lastPointerClient) return;
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const cores = Object.entries(this.cities).map(([id, c]) => ({ id, mesh: c.core, data: c.data }));
-    const hits = this.raycaster.intersectObjects(cores.map((c) => c.mesh), false);
     let hovered = null;
-    if (hits.length) {
-      const hit = cores.find((c) => c.mesh === hits[0].object);
-      if (hit) hovered = { type: "city", id: hit.id, data: hit.data, client: this._lastPointerClient };
+    if (this._lastPointerClient) {
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const cities = Object.entries(this.cities);
+      const cHits = this.raycaster.intersectObjects(cities.map(([, c]) => c.hit), false);
+      if (cHits.length) {
+        const [id, c] = cities.find(([, x]) => x.hit === cHits[0].object);
+        hovered = { type: "city", id, data: c.data };
+      } else {
+        const links = Object.values(this.links);
+        const lHits = this.raycaster.intersectObjects(links.map((l) => l.hit), false);
+        if (lHits.length) {
+          const l = links.find((x) => x.hit === lHits[0].object);
+          hovered = { type: "link", id: l.id, data: this.linkInfo(l.id) };
+        }
+      }
     }
-    if (hovered?.id !== this._hoveredId) {
-      this._hoveredId = hovered?.id ?? null;
-      for (const cb of this.hoverHandlers) cb(hovered);
+    const key = hovered ? `${hovered.type}:${hovered.id}` : null;
+    if (key !== this._hoveredKey) {
+      this._hoveredKey = key;
+      this._hoverLinkId = hovered?.type === "link" ? hovered.id : null;
+      this._syncLinkActive();
+      for (const cb of this.hoverHandlers) cb(hovered && { ...hovered, client: this._lastPointerClient });
     } else if (hovered) {
-      hovered.client = this._lastPointerClient;
-      for (const cb of this.hoverHandlers) cb(hovered);
+      for (const cb of this.hoverHandlers) cb({ ...hovered, client: this._lastPointerClient });
     }
+  }
+
+  // Plain data about a link for tooltips (lengths, last F and status).
+  linkInfo(linkId) {
+    const l = this.links[linkId];
+    if (!l) return null;
+    const ca = this.cities[l.a].data, cb = this.cities[l.b].data;
+    return {
+      id: l.id, from: ca.name, to: cb.name, great_circle_km: l.km,
+      length_km: l.geo.length_km, eta: l.geo.eta, F: l.F, kind: statusKind(l.F, l.status),
+    };
   }
 
   _bindResize() {
@@ -654,49 +822,39 @@ export class NetworkScene {
 
   _animate = () => {
     this._raf = requestAnimationFrame(this._animate);
-    const delta = this.clock.getDelta();
-    // Reduced motion: time stands still, so everything is a static frame.
-    const dt = this.reducedMotion ? 0 : delta;
-    const t = this.reducedMotion ? 0 : this.clock.elapsedTime;
+    this.clock.getDelta();
+    const time = this.reducedMotion ? 0 : this.clock.elapsedTime;
 
-    if (this.seaUniforms) this.seaUniforms.time.value = t;
+    if (this.seaUniforms) this.seaUniforms.time.value = time;
 
     for (const c of Object.values(this.cities)) {
-      const s = 1 + 0.1 * Math.sin(t * 2 + c.pos.x);
-      c.halo.scale.setScalar(s);
-      c.core.rotation.y += dt * 0.5;
+      const k = (time * 0.6 + c.pos.x * 0.3) % 1; // expanding ring
+      c.pulse.scale.setScalar(this.reducedMotion ? 1 : 0.8 + 0.5 * k);
+      c.pulse.material.opacity = this.reducedMotion ? 0.4 : 0.5 * (1 - k);
+      c.core.rotation.y = time * 0.8;
+      c.core.position.y = NODE_LIFT + (this.reducedMotion ? 0 : 0.015 * Math.sin(time * 2 + c.pos.x));
     }
 
-    const dummy = new THREE.Object3D();
     for (const link of Object.values(this.links)) {
-      link.uniforms.time.value = t;
-      const ph = link.photons;
-      if (!ph) continue;
-      for (let i = 0; i < ph.data.length; i++) {
-        const p = ph.data[i];
-        p.t = (p.t + p.speed * dt) % 1;
-        const pos = ph.curve.getPointAt(p.t);
-        dummy.position.copy(pos);
-        dummy.scale.setScalar(1);
-        dummy.updateMatrix();
-        ph.mesh.setMatrixAt(i, dummy.matrix);
-      }
-      ph.mesh.instanceMatrix.needsUpdate = true;
+      link.uniforms.time.value = time;
+      if (link.photons && !this.reducedMotion) this._placePhotons(link, time);
     }
 
+    this._stepTween();
     this._checkHover();
     this.controls.update();
+    // Keep the view over the map: clamp the orbit target (and drag the camera with it).
+    const tg = this.controls.target;
+    const cx = THREE.MathUtils.clamp(tg.x, -9, 9), cz = THREE.MathUtils.clamp(tg.z, -6.5, 7.5);
+    if (cx !== tg.x || cz !== tg.z) {
+      this.camera.position.x += cx - tg.x;
+      this.camera.position.z += cz - tg.z;
+      tg.x = cx;
+      tg.z = cz;
+    }
     this.composer.render();
     this.labelRenderer.render(this.scene, this.camera);
   };
-
-  // Vuela la cámara a enfocar un enlace (usado al cambiar de nivel).
-  focusLink(linkId) {
-    const link = this.links[linkId];
-    if (!link) return;
-    const mid = link.curve.getPointAt(0.5);
-    this.controls.target.lerp(mid, 0.6);
-  }
 
   dispose() {
     cancelAnimationFrame(this._raf);

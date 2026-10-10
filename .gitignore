@@ -7,3 +7,4 @@ uv.lock
 CLAUDE.md
 .claude/
 dist/
+.cache_bake/

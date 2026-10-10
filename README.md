@@ -18,6 +18,12 @@ Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Be
   documentation. The team reviewed and tested every change.
 - Libraries: Qiskit, qiskit-ionq (Apache 2.0), [three.js](https://threejs.org) (MIT, 3D map and bloom
   post-processing; provided by the Qollab runtime, loaded by bare name, not copied into this repo).
+- Map data (baked into `ui/data/` by `tools/bake_terrain.py`, nothing is fetched at runtime):
+  elevation and bathymetry from [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen; sources
+  include SRTM, GMTED2010 and ETOPO1, see the
+  [attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md));
+  colour from [NASA Blue Marble](https://visibleearth.nasa.gov/images/74092) (public domain, NASA Earth Observatory);
+  country borders from [Natural Earth](https://www.naturalearthdata.com/) 1:50m (public domain, simplified).
 - Related prior work (not reused, no code or assets taken): QuTech's
   [Quantum Network Explorer](https://qutech.nl/2021/11/19/new-platform-opens-quantum-networking-to-everyone/)
   also opens quantum networking to everyone. We differ in that every link here is a real Qiskit circuit that

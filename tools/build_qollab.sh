@@ -14,6 +14,8 @@ for f in "$ROOT"/ui/*.js; do
   case "$(basename "$f")" in mock-*) continue ;; esac   # local-only mocks are not bundled
   cp "$f" "$DEST/ui/"
 done
+mkdir -p "$DEST/ui/data"
+cp "$ROOT"/ui/data/*.js "$DEST/ui/data/"
 cp -r "$ROOT/quantum" "$DEST/quantum"
 find "$DEST/quantum" -name "__pycache__" -type d -prune -exec rm -rf {} +
 find "$DEST/quantum" -name "*.pyc" -delete
@@ -34,7 +36,7 @@ fi
 node - "$DEST" <<'JS'
 const fs = require('fs'), path = require('path');
 const root = process.argv[2]; let bad = 0;
-const files = [path.join(root, 'main.js'), ...fs.readdirSync(path.join(root, 'ui')).filter((f) => f.endsWith('.js')).map((f) => path.join(root, 'ui', f))];
+const files = [path.join(root, 'main.js'), ...fs.readdirSync(path.join(root, 'ui')).filter((f) => f.endsWith('.js')).map((f) => path.join(root, 'ui', f)), ...fs.readdirSync(path.join(root, 'ui', 'data')).filter((f) => f.endsWith('.js')).map((f) => path.join(root, 'ui', 'data', f))];
 const allowed = (s) => s === 'three' || s.startsWith('three/addons/') || s === 'quantum.api';
 for (const f of files) {
   const raw = fs.readFileSync(f, 'utf8');

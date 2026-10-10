@@ -18,8 +18,10 @@ ui/
   i18n.js         # diccionarios EN/ES, t(), applyI18n(), setLang()
   explain.js      # capa educativa ("¿Qué estoy viendo?") sobre i18n
   panel.js        # formulario desde info() y render de resultados / errores / recorded
-  scene.js        # escena three.js (terreno, ciudades, enlaces, fotones, bloom)
-  colombia-geo.js # contorno de Colombia + relieve procedural
+  scene.js        # escena three.js (terreno real, ciudades, enlaces, fotones, bloom)
+  terrain.js      # DEM decodificado, proyección compartida lat/lon -> escena, textura Blue Marble
+  colombia-geo.js # proyección (= quantum/geo.py); contorno y relieve procedural ya no se usan en la escena
+  data/           # GENERADO por tools/bake_terrain.py: terrain.js, earth_color.js, borders.js
 dev/index.html    # SOLO local (no se sube): página completa con import map; GENERADA
 tools/make_dev_html.sh   # regenera dev/index.html desde index.html
 tools/build_qollab.sh    # empaqueta dist/qollab_app.zip para Qollab
@@ -55,10 +57,10 @@ Sin bundler ni assets binarios. En Qollab, `three` y `three/addons/...` (three.j
 - **three.js** con `WebGLRenderer` en ACES Filmic + sRGB y sombras suaves.
 - **Postprocesado** (`EffectComposer` + `UnrealBloomPass` + `OutputPass`): todo
   lo luminoso (nodos, enlaces, fotones) resplandece.
-- **Terreno de Colombia**: malla deformada por un heightmap **procedural** que
-  modela las tres cordilleras de los Andes, la Sierra Nevada y los llanos, con
-  color por altura (selva → roca → nieve), recortada por el contorno real del
-  país. Alrededor, un **mar con shader** de olas y espuma.
+- **Terreno real**: DEM de AWS Terrain Tiles (tierra + fondo marino, lon −92..−58, lat −8..16,
+  ~185 k vértices) con NASA Blue Marble encima; Colombia resaltada (borde brillante) y
+  vecinos atenuados. Mar semitransparente animado a 0 m. Datos horneados con
+  `tools/bake_terrain.py` (necesita red solo para regenerar).
 - **Shaders propios** (GLSL) para el cielo (domo con degradado), el mar y los
   **enlaces** (pulsos de energía que viajan por la fibra, coloreados por
   fidelidad).
