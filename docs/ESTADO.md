@@ -35,13 +35,33 @@ versión de `integration` (commit `7816729`), que ya funcionó en Qollab.
    - IonQ Forte 1 (simulador gratuito, no el de "Quantum Computer"): el primer nivel corre en vivo
      (~13 s); el siguiente debe mostrar "Showing recorded result", nunca "Failed".
    - Revisar que carguen las fuentes, la escena 3D y el recorrido guiado; probar EN/ES.
-2. En Qollab, dejar el **Built-in simulator como backend por defecto** del proyecto (consejo del
-   mentor: los jueces corren el simulador por defecto, y IonQ acepta un solo circuito por job).
-3. **Publicar una versión** antes del domingo: https://qollab.xyz/learn/docs/publish
-4. Video demo de 2–3 min (YouTube no listado), guion centrado en "noise is someone listening".
-5. README como Project Card completa (qué hace, problema, cómo correr, cómo extender, límites
+2. **Opcional (suma): grabar resultados reales de IonQ por nivel** (sugerencia del mentor):
+   - Añadir a la UI un botón "Export result" (la función `api.export_result` ya existe; descarga JSON).
+   - Correr cada nivel en su propio Run (Stop → Run entre niveles, ~13 s c/u) en **IonQ Aria 1**
+     (simulador gratuito) y exportar. **Purify reducido necesita 27 qubits y Aria tiene 25**: grabar
+     purify en **Forte 1** y decirlo.
+   - Guardar los JSON en `data/recorded/` (rutas como strings literales en `RECORDED_OPENERS` de
+     `quantum/api.py`) y hacer que, en IonQ, la app muestre el grabado de IonQ de ese nivel.
+   - Etiquetar en la app y en el README qué backend produjo cada resultado grabado.
+3. En Qollab, dejar el **Built-in simulator como backend por defecto** del proyecto.
+4. **Cambiar el proyecto a Public y publicar una versión** antes del cierre (obligatorio):
+   https://qollab.xyz/learn/docs/publish
+5. Video demo de 2–3 min (YouTube no listado), guion centrado en "noise is someone listening".
+6. README como Project Card completa (qué hace, problema, cómo correr, cómo extender, límites
    honestos). Las secciones de créditos y declaración de IA ya están completas.
-6. Entregar desde la team page (capitán), tema **Quantum Unlocked**. Cierre: dom 11 oct, 18:00 COT.
+7. Entregar desde la team page (capitán), tema **Quantum Unlocked**.
+   Cierre: dom 11 oct, 7 pm ET = **18:00 COT**.
+
+### Respuestas de los mentores (10 oct)
+
+- IonQ acepta **un circuito por job por diseño**; no existe opción de lote. Nuestro empaquetado por
+  nivel es el enfoque correcto.
+- **IonQ no es obligatorio**: los jueces corren el simulador gratuito y el backend no puntúa. Lo
+  importante es que, por defecto, **todos los niveles corran en vivo en un solo Run** en el simulador
+  local gratuito.
+- Para mostrar IonQ: grabar cada nivel por separado (Aria 1), guardarlo como archivo y mostrarlo como
+  "recorded", con etiqueta clara del backend en la app y en el README.
+- Antes del cierre: proyecto en **Public** y **versión publicada**.
 
 ## Hechos de la plataforma comprobados (no volver a dudar)
 
