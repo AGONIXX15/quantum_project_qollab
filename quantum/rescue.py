@@ -55,6 +55,7 @@ from .noise import (
 )
 
 MAX_CIRCUITS = 16
+THEORY_ONLY = "theory only (not measured)"
 DEFAULT_DAMAGE = {"kind": "werner", "F": 0.7}
 
 
@@ -90,28 +91,37 @@ def _healthy(healthy_F: float | Sequence[float]) -> tuple[float, float]:
 
 def plan_rescue(
     damage: dict[str, Any] | None = None, healthy_F: float | Sequence[float] = 0.95,
-    mode: str = "precision",
+    mode: str = "precision", single_u: bool = False,
 ) -> dict[str, Any]:
-    """Resolve the spec, the mode actually used and the U list to build."""
+    """Resolve the spec, the mode actually used and the U list to build.
+
+    ``single_u`` (IonQ width reduction) builds only the predicted U (``I`` when
+    that is the best) instead of the fixed circuit plus the predicted U.
+    """
     spec, clean = damage_to_spec(damage)
     mode_used = "teaching" if spec["kind"] == "damping" else mode
     if mode_used not in ("teaching", "precision"):
         raise ValueError("mode must be 'teaching' or 'precision'")
     best, _ = purify.choose_u(bell_diag_of(spec))
-    us = ("I",) if best == "I" else ("I", best)
+    us = ("I",) if best == "I" else ((best,) if single_u else ("I", best))
     return {"spec": spec, "damage": clean, "mode": mode_used, "us": us,
             "healthy": _healthy(healthy_F), "predicted_u": best}
 
 
 def build_rescue(
     damage: dict[str, Any] | None = None, healthy_F: float | Sequence[float] = 0.95,
-    mode: str = "precision",
+    mode: str = "precision", reroute: bool = True, single_u: bool = False,
 ):
-    """Circuits of the rescue (tomography + purify + swap) and the plan."""
-    plan = plan_rescue(damage, healthy_F, mode)
+    """Circuits of the rescue (tomography + purify + swap) and the plan.
+
+    ``reroute=False`` leaves out the swap circuits and ``single_u=True`` builds
+    one purify U only; both exist to fit one IonQ circuit (see ``batch``).
+    """
+    plan = plan_rescue(damage, healthy_F, mode, single_u)
     f1, f2 = plan["healthy"]
     circuits = purify.build_purify(plan["spec"], plan["us"], None, plan["mode"])
-    circuits += swap.build_swap(f1, f2, plan["mode"])
+    if reroute:
+        circuits += swap.build_swap(f1, f2, plan["mode"])
     if len(circuits) > MAX_CIRCUITS:
         raise ValueError(f"rescue needs {len(circuits)} circuits (max {MAX_CIRCUITS})")
     return circuits, plan
@@ -159,6 +169,8 @@ def decode_rescue(
     target_F: float = 0.9,
     mode: str = "precision",
     seed: int = 0,
+    reroute: bool = True,
+    single_u: bool = False,
 ) -> dict[str, Any]:
     """Turn the counts of ``build_rescue`` into strategies, recommendation, viz.
 
@@ -169,11 +181,11 @@ def decode_rescue(
     point estimate of p_s, while the fidelity test uses its lower CI bound.
     """
     broken = geo.normalize_link(broken)
-    plan = plan_rescue(damage, healthy_F, mode)
+    plan = plan_rescue(damage, healthy_F, mode, single_u)
     spec, us, mode_u = plan["spec"], plan["us"], plan["mode"]
     f1, f2 = plan["healthy"]
     pdec = purify.decode_purify(counts_by_id, spec, us, None, mode_u, seed)
-    sdec = swap.decode_swap(counts_by_id, f1, f2, mode_u, seed + 1)
+    sdec = swap.decode_swap(counts_by_id, f1, f2, mode_u, seed + 1) if reroute else None
     pm, ex = pdec["metrics"], pdec["extra"]
     chosen = pdec["viz"]["choice"]["chosen"]
     tomo = ex["tomo_corr"]
@@ -222,22 +234,36 @@ def decode_rescue(
         f"Direct link: F = {fi['value']:.3f}, 1 raw pair per delivered pair.",
         an.sample_parity(ex["per_basis"]["tomo"]["ZZ"], [0, 1], seed=seed),
     ))
-    sf = sdec["metrics"]["fidelity"]
     th_sw = swap.theory_swap(f1, f2)
-    sw_p = swap.swap_bell_diag(bell_diag_of(werner_spec(f1)), bell_diag_of(werner_spec(f2)))
-    strategies.append(strat(
-        "reroute", f"Reroute via {geo.CITIES[geo.third_city(broken)]['name']}", sf,
-        _q(sdec["metrics"]["corr_ZZ"]), _q(sdec["metrics"]["corr_XX"]), 2.0,
-        an.metric(2.0, [2.0, 2.0], 2.0), _theory_q(sw_p),
-        f"Swap over healthy links {ra} and {rb}: F = {sf['value']:.3f} (theory {th_sw['F']:.3f}), "
-        "2 raw pairs (ideal Bell measurement).",
-        sdec["viz"]["samples"],
-    ))
+    if sdec is None:
+        strategies.append({
+            "key": "reroute", "title": f"Reroute via {geo.CITIES[geo.third_city(broken)]['name']}",
+            "status": "not_run", "meets_target": False, "u": None,
+            "fidelity": an.metric(th_sw["F"], [th_sw["F"], th_sw["F"]], th_sw["F"], measured=False,
+                                  label=THEORY_ONLY),
+            "raw_pairs": an.metric(2.0, [2.0, 2.0], 2.0, measured=False, label=THEORY_ONLY),
+            "theory_meets_target": bool(th_sw["F"] >= target_F), "samples": [],
+            "explanation": "Not run: the swap circuits did not fit in the single IonQ circuit of this "
+                           f"run. Theory only (not measured): F = {th_sw['F']:.3f}, 2 raw pairs.",
+        })
+    else:
+        sf = sdec["metrics"]["fidelity"]
+        sw_p = swap.swap_bell_diag(bell_diag_of(werner_spec(f1)), bell_diag_of(werner_spec(f2)))
+        strategies.append(strat(
+            "reroute", f"Reroute via {geo.CITIES[geo.third_city(broken)]['name']}", sf,
+            _q(sdec["metrics"]["corr_ZZ"]), _q(sdec["metrics"]["corr_XX"]), 2.0,
+            an.metric(2.0, [2.0, 2.0], 2.0), _theory_q(sw_p),
+            f"Swap over healthy links {ra} and {rb}: F = {sf['value']:.3f} (theory {th_sw['F']:.3f}), "
+            "2 raw pairs (ideal Bell measurement).",
+            sdec["viz"]["samples"],
+        ))
     for key, u, title in (("purify_fixed", "I", "Purify once (fixed DEJMPS)"),
                           ("purify_adaptive", chosen, "Purify once (adaptive U)")):
         if key == "purify_adaptive" and chosen == "I":
             continue
         tag = "fixed" if u == "I" else "adaptive"
+        if u not in ex["stats"]:  # fixed circuit left out to fit one IonQ circuit
+            continue
         st = ex["stats"][u]
         if st["p_s"] <= 0 or any(c.get("empty") for c in st["corr"].values()):
             strategies.append(no_data(key, title, u))
@@ -253,6 +279,7 @@ def decode_rescue(
         ))
     live = [s for s in strategies if s["status"] == "ok"]
     ok = [s for s in live if s["meets_target"]]
+    not_run = [s for s in strategies if s["status"] == "not_run"]
     criterion = ("lower CI bound of F meets the target; then fewest raw pairs per delivered pair "
                  "including fiber loss")
     if ok:
@@ -269,6 +296,12 @@ def decode_rescue(
                "message": f"No single strategy meets the target {target_F} with confidence. "
                           f"Best measured: {top['title']} (F = {top['fidelity']['value']:.3f}). "
                           "See the multi-round projections, or lower the target."}
+    rec["incomplete"] = bool(not_run)
+    rec["not_measured"] = [s["key"] for s in not_run]
+    if not_run:
+        extra = "; ".join(f"{s['title']}: F = {s['fidelity']['value']:.3f} ({THEORY_ONLY})" for s in not_run)
+        rec["message"] += (f" INCOMPLETE: not measured on this backend: {extra}. "
+                           "The recommendation covers only the measured strategies.")
     proj = {
         name: purify.rounds_to_target(th_in, target_F, strat_name)
         for name, strat_name in (("recursive_fixed_single_link", "fixed"), ("adaptive", "adaptive"),

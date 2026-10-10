@@ -1,7 +1,8 @@
 """Single-job circuit execution shared by all levels.
 
 The backend is always an argument (Qollab creates it). All circuits go out in
-ONE ``backend.run`` call, which is mandatory on IonQ (one job per execution).
+ONE ``backend.run`` call (``run_batch``); on IonQ, whose Qollab proxy accepts only
+single-circuit jobs, ``run_packed`` merges them into ONE circuit first.
 
 Compilation (``compile_for``):
     - IonQ (all-to-all): transpile to a small basis, no coupling map and no
@@ -26,9 +27,11 @@ from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler.passes import RemoveBarriers
 
 from . import analysis as an
+from . import pack as pk
 
 Counts = dict[str, int]
 
+IONQ_DEFAULT_QUBITS = 25  # Aria; used when the backend does not report its width
 IONQ_BASIS = ["h", "x", "y", "z", "s", "sdg", "rx", "ry", "rz", "cx"]
 _NOT_GATES = {
     "measure", "reset", "delay", "barrier", "if_else", "while_loop", "for_loop",
@@ -143,3 +146,64 @@ def circuit_report(
 ) -> list[dict[str, Any]]:
     """``circuits[]`` entries: logical info plus compiled 2q count and depth."""
     return [{**an.circuit_info(qc), **compiled.get(qc.name, {})} for qc in circuits]
+
+
+def ionq_max_qubits(backend: Any) -> int:
+    """Width limit of one IonQ circuit: ``backend.num_qubits`` if usable, else 25."""
+    try:
+        n = backend.num_qubits
+        n = n() if callable(n) else n
+        n = int(n)
+        return n if n > 0 else IONQ_DEFAULT_QUBITS
+    except Exception:  # noqa: BLE001 - missing or odd attribute
+        return IONQ_DEFAULT_QUBITS
+
+
+def run_packed(
+    backend: Any,
+    circuits: list[QuantumCircuit],
+    shots: int = 1000,
+    seed: int = 1234,
+    before_run: Callable[[], None] | None = None,
+    on_submit_error: Callable[[], None] | None = None,
+    **run_options: Any,
+) -> tuple[dict[str, Counts], dict[str, dict[str, int]], dict[str, Any]]:
+    """Compile ``circuits``, pack them into ONE circuit and send ONE ``backend.run``.
+
+    This is the IonQ path (Qollab accepts one single-circuit job per Run).
+    Returns ``(counts, compiled, packed)``: ``counts`` and ``compiled`` have the
+    same meaning and keys as in ``run_batch`` (counts split back per original
+    circuit); ``packed`` has ``circuit`` (id/qubits/depth/two_qubit_gates of the
+    packed circuit), ``layout`` and the raw packed ``counts``. ``before_run`` is
+    called right before the submit; ``on_submit_error`` is called (then the error
+    is re-raised) if ``backend.run`` itself raises, i.e. no job was accepted, so a
+    caller can undo what ``before_run`` recorded. A failure in ``.result()`` does
+    not call it (the job was spent). Nothing is submitted if the compiled width
+    exceeds ``ionq_max_qubits(backend)`` (``pack.DoesNotFit``).
+    """
+    for qc in circuits:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", qc.name):
+            raise ValueError(f"unsafe circuit name {qc.name!r}")
+        assert len(qc.cregs) == 1, f"{qc.name}: expected a single classical register"
+    compiled = compile_for(backend, circuits, seed)
+    big, layout = pk.pack_circuits(compiled)
+    cap = ionq_max_qubits(backend)
+    if big.num_qubits > cap:
+        raise pk.DoesNotFit(big.num_qubits, cap)
+    if before_run is not None:
+        before_run()
+    try:
+        job = backend.run(big, shots=shots, **run_options)
+    except BaseException:
+        if on_submit_error is not None:
+            on_submit_error()
+        raise
+    raw = dict(job.result().get_counts())
+    counts = pk.unpack_counts(raw, layout)
+    info = {}
+    for name, c in zip((qc.name for qc in circuits), compiled):
+        ci = an.circuit_info(c)
+        info[name] = {"compiled_two_qubit_gates": ci["two_qubit_gates"], "compiled_depth": ci["depth"]}
+    packed = {"circuit": an.circuit_info(big), "layout": pk.layout_plain(layout), "counts": raw,
+              "bit_order": pk.describe_layout(layout)}
+    return counts, info, packed

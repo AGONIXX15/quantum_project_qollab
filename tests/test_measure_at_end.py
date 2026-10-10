@@ -30,7 +30,7 @@ def all_circuits() -> list[QuantumCircuit]:
     ]
 
 
-def check_measure_at_end(qc: QuantumCircuit) -> None:
+def check_measure_at_end(qc: QuantumCircuit, max_qubits: int = 16) -> None:
     measured: set[int] = set()
     for inst in qc.data:
         op = inst.operation
@@ -42,7 +42,7 @@ def check_measure_at_end(qc: QuantumCircuit) -> None:
         assert not (idx & measured), f"{qc.name}: op {op.name} after measure"
         if op.name == "measure":
             measured |= idx
-    assert qc.num_qubits <= 16
+    assert qc.num_qubits <= max_qubits
 
 
 def test_measure_at_end_all_circuits():

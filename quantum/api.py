@@ -5,16 +5,22 @@ creates it; this module never creates or fixes one). Each returns a dict:
 ``{"ok": True, ...result}`` or ``{"ok": False, "error": "..."}`` so the UI
 never hangs on an exception. Angles in this API are DEGREES.
 
-IonQ allows one job per run, so on an IonQ backend the single-level functions
-refuse with the stable error code ``ionq_use_full_batch`` (a click would burn
-the job); ``full_batch`` sends every circuit in a single ``backend.run`` and
-``rescue`` (one ``backend.run``, at most 16 circuits) is allowed as a
-single-job alternative. ``decode_only`` re-decodes saved counts offline.
+Qollab allows ONE IonQ job per Run and its IonQ proxy accepts only SINGLE-circuit
+jobs (``ionq.circuit.v1``). So on an IonQ backend ``run_level`` runs exactly one
+level per Run, as ONE packed circuit (the level's circuits side by side on
+disjoint qubits, counts split back in Python; see ``pack``), ~13 s per job. The
+single-level functions refuse with the stable error code ``ionq_use_run_level``
+(a click would burn the job), ``full_batch`` is simulator-only (code
+``ionq_use_run_level`` on IonQ) and ``rescue`` is allowed on IonQ (same packed
+path). A level that does not fit the backend width is reduced and flagged
+(``ionq_reduced: true`` + ``ionq_note``) or refused with ``ionq_too_wide``
+(nothing submitted; ``run_level`` then adds the recorded fallback).
+``decode_only`` re-decodes saved counts offline.
 
 ``run_level`` is the recommended UI entry point: on a simulator it runs the
-level directly; on IonQ it runs ``full_batch`` once, caches it, and serves every
-level from the cache (one job per Python execution; later IonQ jobs are refused
-with the code ``ionq_job_used``).
+level directly; on IonQ it runs the requested level packed, once. The same level
+again is served from the cache; any other level is refused with the code
+``ionq_job_used`` (plus the recorded fallback).
 
 From JS (positional calls are the documented contract; they are the pattern
 proven on Qollab)::
@@ -46,12 +52,14 @@ from typing import Any, Callable
 from . import analysis as an
 from . import validate as V
 from . import batch, geo, links, noise, purify, qkd, swap, teleport
+from . import pack as _pack
 from . import rescue as _rescue
 
 VERSION = "0.1.0"
 ATTRIBUTION = "This effort is supported by Qollab & IonQ."
-IONQ_CODE = "ionq_use_full_batch"
-IONQ_MESSAGE = "IonQ allows one job per run: use full_batch"
+IONQ_CODE = "ionq_use_run_level"
+IONQ_MESSAGE = "IonQ allows one single-circuit job per run: use run_level"
+IONQ_WIDE_CODE = "ionq_too_wide"
 IONQ_USED_CODE = "ionq_job_used"
 IONQ_USED_MESSAGE = ("IonQ allows one job per run; results above come from that job. "
                      "Press Run again to start a new job.")
@@ -192,7 +200,7 @@ def info() -> dict[str, Any]:
                     "F": _p(0.25, 1, None), "smart_direct": {"default": d["qkd"]["smart_direct"]},
                     "beta_source": {"options": ["split", "oracle"], "default": d["qkd"]["beta_source"]}}},
         {"id": "rescue", "title": "Save the Quantum Network", "function": "rescue",
-         "summary": "Repair a damaged link: direct, reroute or purify (one job, IonQ allowed).",
+         "summary": "Repair a damaged link: direct, reroute or purify (one job, IonQ allowed; reduced on narrow backends).",
          "params": {"shots": shots, "broken": {"options": list(geo.LINK_IDS), "default": d["rescue"]["broken"]},
                     "damage_kind": {"options": ["werner", "damping", "spy"], "default": d["rescue"]["damage"]["kind"]},
                     "damage_F": _p(0.25, 1, d["rescue"]["damage"].get("F", 0.7)),
@@ -205,7 +213,7 @@ def info() -> dict[str, Any]:
         "ok": True, "version": VERSION, "attribution": ATTRIBUTION, "levels": levels,
         "run_level": {"function": "run_level", "levels": list(RUN_LEVELS),
                       "summary": "Recommended UI entry point: run_level(backend, level, **params). "
-                                 "Simulators run the level live; IonQ runs one cached full_batch."},
+                                 "Simulators run the level live; IonQ runs that one level packed in one circuit (1 Run = 1 level)."},
         "full_batch": {
             "function": "full_batch", "recommended_entry": "run_level", "max_circuits": batch.MAX_BATCH,
             "default_shots": 1000, "ionq_shots": 500,
@@ -325,30 +333,41 @@ def rescue(
         _num("healthy_F", healthy_F, 0.25, 1.0), _num("target_F", target_F, 0.3, 1.0),
         _choice("mode", mode, ("teaching", "precision")), int(seed),
     )
-    if an.is_ionq(backend):
-        state = _ionq_state(backend)
-        if state["used"]:
-            return _ionq_used(state)
-        return _rescue.run_rescue(backend, *args, before_run=lambda: state.update(used=True))
+    if an.is_ionq(backend):  # args are validated above: now the single packed job
+        flat = {"broken": broken, "damage_kind": kind, "damage_F": damage_F, "damage_gamma": damage_gamma,
+                "damage_theta_deg": damage_theta_deg, "healthy_F": healthy_F, "target_F": target_F, "mode": mode}
+        return _ionq_level(backend, "rescue", shots, seed, _batch_params("rescue", flat))
     return _rescue.run_rescue(backend, *args)
 
 
-def _run_batch_once(backend: Any, shots: int | None, seed: int, params: Any) -> dict[str, Any]:
-    """``batch.run_full_batch`` with the IonQ one-job guard and cache (plain dict result)."""
+def _ionq_level(backend: Any, level: str, shots: int | None, seed: int, params: dict[str, Any]) -> dict[str, Any]:
+    """IonQ: run ``level`` as ONE packed circuit in ONE job (once per backend object).
+
+    The same level again returns the cached result (``cached_run`` True); any
+    other level gets ``ionq_job_used``. Validation and the width check happen
+    before the job flag is set, so a bad request or a level that does not fit
+    (``ionq_too_wide``) never burns the job.
+    """
+    state = _ionq_state(backend)
+    cache = state["cache"]
+    if cache and level in cache["levels"]:
+        out = {**cache["levels"][level], "cached_run": True}
+        if params or shots is not None:
+            out["params_ignored"] = True
+        return out
+    if state["used"]:
+        return _ionq_used(state)
     n = None if shots is None else _shots(shots)
-    ionq = an.is_ionq(backend)
-    if ionq:
-        state = _ionq_state(backend)
-        if state["used"]:
-            return _ionq_used(state)
-        batch.resolve_params(_py(params))  # validate first: a typo must not burn the job
-        # the flag is set right before backend.run (compile errors do not burn the job)
-        out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params),
-                                               before_run=lambda: state.update(used=True)))
-    else:
-        out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params)))
-    if ionq:
-        state["cache"] = out
+    try:
+        res = batch.run_level_packed(backend, level, n, int(seed), params or None,
+                                     before_run=lambda: state.update(used=True),
+                                     on_submit_error=lambda: state.update(used=False))
+    except _pack.DoesNotFit as exc:
+        return {"ok": False, "code": IONQ_WIDE_CODE, "error": f"{level} {exc}",
+                "needed_qubits": exc.needed, "max_qubits": exc.cap}
+    out = {"ok": True, "source": "ionq_packed", "cached_run": False, **an.to_plain(res)}
+    state["cache"] = {"backend": res["backend"], "timestamp": res["timestamp"], "shots": res["shots"],
+                      "levels": {level: out}}
     return out
 
 
@@ -356,8 +375,15 @@ def _run_batch_once(backend: Any, shots: int | None, seed: int, params: Any) -> 
 def full_batch(
     backend: Any, shots: int | None = None, seed: int = 0, params: Any = None,
 ) -> dict[str, Any]:
-    """Whole experiment in ONE job (allowed on IonQ once per execution; validates every parameter first)."""
-    return _run_batch_once(backend, shots, seed, params)
+    """Whole experiment in ONE multi-circuit job (simulators only).
+
+    On IonQ it is refused with ``ionq_use_run_level`` without submitting anything:
+    Qollab's IonQ proxy rejects multi-circuit jobs; use ``run_level``.
+    """
+    if an.is_ionq(backend):
+        return {"ok": False, "error": IONQ_MESSAGE, "code": IONQ_CODE}
+    n = None if shots is None else _shots(shots)
+    return an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params)))
 
 
 def _batch_params(level: str, p: dict[str, Any]) -> dict[str, Any]:
@@ -386,11 +412,13 @@ def run_level(backend: Any, level: str, params: Any = None, **kw: Any) -> dict[s
     arguments are that level's usual
     arguments (``shots``, ``seed`` and the level's own, degrees for angles).
     Simulators call the level function directly. On IonQ the first call runs
-    ``full_batch`` once (the level's ``params`` replace its defaults; other
-    levels use defaults), caches it and returns this level's result with
-    ``source: "ionq_batch_cache"`` and ``batch_ok``; later calls are served from
-    the cache without any new job (their ``params`` are ignored and flagged by
-    ``params_ignored``). Known limit: ``F`` for qkd is not available on IonQ.
+    THAT level as one packed circuit in the Run's single job (``source:
+    "ionq_packed"``; ``ionq_reduced`` / ``ionq_note`` say if the level had to be
+    shrunk to fit the backend width). The same level again is served from the
+    cache (``cached_run`` True, ``params_ignored`` if new parameters were given);
+    any other level gets ``ionq_job_used`` and, below, the recorded fallback; a
+    level wider than the backend gets ``ionq_too_wide`` (nothing submitted).
+    Known limit: ``F`` for qkd is not available on IonQ.
 
     Recorded fallback: if the result is ``ok: False`` for any reason other than
     the caller's own input (InputError validation, unknown argument; those carry
@@ -436,23 +464,7 @@ def _run_level_live(backend: Any, level: str, params: Any = None, **kw: Any) -> 
     if not an.is_ionq(backend):
         return LEVEL_FUNCS[level](backend, **params)
     shots, seed = params.pop("shots", None), params.pop("seed", 0)
-    state = _ionq_state(backend)
-    fresh = state["cache"] is None
-    if fresh:
-        bp = _batch_params(level, params)
-        res = _run_batch_once(backend, shots, seed, {level: bp} if bp else None)
-        if res.get("ok") is False:
-            return res
-    else:
-        res = state["cache"]
-    lv = res["levels"].get(level)
-    out = {"ok": True, "source": "ionq_batch_cache", "batch_ok": all(
-        v.get("ok") for v in res["levels"].values()), "cached_run": not fresh}
-    if not fresh and (params or shots is not None):
-        out["params_ignored"] = True
-    if not lv or not lv.get("ok"):
-        return {**out, "ok": False, "error": (lv or {}).get("error", f"level {level} missing from the batch")}
-    return {**out, **{k: v for k, v in lv.items() if k != "ok"}}
+    return _ionq_level(backend, level, shots, seed, _batch_params(level, params))
 
 
 LEVEL_FUNCS: dict[str, Callable[..., dict[str, Any]]] = {

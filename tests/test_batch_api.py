@@ -9,6 +9,7 @@ from qiskit.providers.basic_provider import BasicSimulator
 
 from quantum import analysis as an
 from quantum import api, batch, geo, noise, rescue, swap
+from tests.helpers import FakeIonQ as SimIonQ
 from tests.test_measure_at_end import check_measure_at_end
 
 OPTS = {"seed_simulator": 11}
@@ -324,6 +325,8 @@ def test_decode_only_rescue_with_new_target():
 
 
 def test_full_batch_ionq_defaults_to_500_shots():
+    # run_full_batch itself (simulator-style multi-circuit job) still defaults to 500 shots
+    # when it sees an IonQ name; the API no longer calls it on IonQ (see test_api_ionq_refusal_and_one_job).
     be = Counting()
     be.name = "ionq_simulator"  # hits the name-based IonQ detection
     r = batch.run_full_batch(be, params=None, **OPTS)
@@ -367,23 +370,22 @@ def test_api_errors_are_enveloped(call):
 
 
 def test_api_ionq_refusal_and_one_job():
+    # Single-level functions and full_batch would burn the job (Qollab's IonQ proxy rejects
+    # multi-circuit jobs), so they are refused with the stable code ionq_use_run_level.
     for fn in (api.level_link, api.level_teleport, api.level_noise, api.level_swap, api.level_qkd):
         out = fn(FakeIonQ())
-        assert out == {"ok": False, "error": api.IONQ_MESSAGE, "code": "ionq_use_full_batch"}
-    assert api.level_purify(FakeIonQ(), 500, F=0.8)["code"] == "ionq_use_full_batch"
-    be = Counting()
-    be.name = "ionq_simulator"
-    Counting.runs = 0
+        assert out == {"ok": False, "error": api.IONQ_MESSAGE, "code": "ionq_use_run_level"}
+    assert api.level_purify(FakeIonQ(), 500, F=0.8)["code"] == "ionq_use_run_level"
+    be = SimIonQ()
     api._reset_ionq_state()
-    out = api.full_batch(be)
-    assert out["ok"] and out["mode"] == "batch" and Counting.runs == 1 and out["shots"] == 500
-    json.dumps(out)
-    # rescue is a single job (<= 16 circuits): allowed on IonQ, but only one job per execution
-    Counting.runs = 0
-    assert api.rescue(be, 300)["code"] == "ionq_job_used" and Counting.runs == 0
-    api._reset_ionq_state()
+    assert api.full_batch(be)["code"] == "ionq_use_run_level" and not be.runs
+    # rescue is allowed on IonQ: one packed circuit, one job per execution
     out = api.rescue(be, 300)
-    assert out["ok"] and Counting.runs == 1 and out["backend"] == "ionq_simulator"
+    assert out["ok"] and len(be.runs) == 1 and len(be.runs[0]) == 1 and out["backend"] == "ionq_simulator"
+    json.dumps(out)
+    again = api.rescue(be, 300, broken="MED-CAL")  # same level: served from the cache, no new job
+    assert again["cached_run"] is True and again["params_ignored"] is True and len(be.runs) == 1
+    assert api.run_level(be, "link")["code"] == "ionq_job_used" and len(be.runs) == 1
 
 
 def test_api_info_and_files():

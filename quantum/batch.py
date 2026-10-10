@@ -1,7 +1,9 @@
 """Full experiment in ONE job: levels 1-6, a rescue scenario and readout calibration.
 
-IonQ allows one job per run, so every circuit goes out in a single
-``backend.run`` (via ``execute.run_batch``), at most 40 circuits. Identical
+On simulators every circuit goes out in a single ``backend.run`` (via
+``execute.run_batch``), at most 40 circuits. IonQ (Qollab) accepts one
+SINGLE-circuit job per Run, so there ``run_level_packed`` runs ONE level (plus the
+readout calibration when it fits) merged into one circuit (see ``pack``). Identical
 circuits needed by several levels are deduplicated by a structural key (gates,
 parameters and qubit/clbit indices; names, register names and the decoder-only
 ``channel`` barrier are ignored) and the shared counts are handed to every
@@ -41,8 +43,9 @@ from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 
 from . import analysis as an
 from . import geo, links, noise, purify, qkd, rescue, swap, teleport
+from . import pack as pk
 from . import validate as V
-from .execute import circuit_report, run_batch
+from .execute import circuit_report, ionq_max_qubits, run_batch, run_packed
 
 MAX_BATCH = 40
 
@@ -306,7 +309,7 @@ def decode_level(
         pout, bo = {**q, "channel": noise._CHANNEL[q["mode"]]}, swap.BIT_ORDER
     elif level == "purify":
         q = ip["purify"]
-        us = _purify_us(q["spec"], q["strategy"])
+        us = q.get("us") or _purify_us(q["spec"], q["strategy"])  # "us": IonQ-reduced list
         dec = purify.decode_purify(cm, q["spec"], us, None, q["mode"], seed)
         dec.pop("extra")
         pout = {"noise": q["spec"], "strategy": q["strategy"], "mode": q["mode"],
@@ -318,7 +321,8 @@ def decode_level(
         pout, bo = dict(q), qkd.BIT_ORDER
     elif level == "rescue":
         q = ip["rescue"]
-        dec = rescue.decode_rescue(cm, q["damage"], q["broken"], q["healthy_F"], q["target_F"], q["mode"], seed)
+        dec = rescue.decode_rescue(cm, q["damage"], q["broken"], q["healthy_F"], q["target_F"], q["mode"], seed,
+                                   q.get("reroute", True), q.get("single_u", False))
         pout, bo = dict(q), purify.BIT_ORDER + " | swap: " + swap.BIT_ORDER
     else:
         raise ValueError(f"cannot decode level {level!r}")
@@ -416,3 +420,135 @@ def decode_only(
         shots = int(sum(next(iter(cm.values())).values())) if cm else 0
     stamp = timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds")
     return _package(level, dec, pout, bo, qcs, cm, {}, backend_name, shots, stamp, mode)
+
+
+# --------------------------------------------------------------------------
+# IonQ: one level per Run, packed into ONE circuit
+# --------------------------------------------------------------------------
+
+READOUT_LEVELS = ("link", "noise")  # the levels whose decoder uses the readout calibration
+PACKED_SHOTS = 500
+
+
+def _width(circuits: list[QuantumCircuit]) -> int:
+    return sum(c.num_qubits for c in circuits)
+
+
+def _first_fitting(options: list[tuple[Any, list[QuantumCircuit]]], cap: int):
+    """The first ``(tag, circuits)`` whose total width is <= ``cap``; else None."""
+    return next(((t, c) for t, c in options if _width(c) <= cap), None)
+
+
+def plan_packed(level: str, ip: dict[str, dict], cap: int) -> tuple[list[QuantumCircuit], dict[str, dict], dict[str, Any]]:
+    """Choose the circuits of ``level`` that fit in ONE circuit of at most ``cap`` qubits.
+
+    Returns ``(circuits, ip, info)``: ``circuits`` are the level circuits plus the
+    readout calibration (8 qubits) when the level uses it (link, noise) and it
+    fits; ``ip`` is ``ip`` with the reduction recorded for the decoder;
+    ``info`` has ``reduced`` (bool), ``notes`` and ``readout`` (bool). Reductions,
+    smallest first, always flagged:
+
+    - purify: ``strategy="all"`` (6 U) or the fixed circuit + predicted U (45
+      qubits with the default channel) shrink to tomography + the predicted U
+      only (27 qubits); the fixed-circuit baseline is then not measured.
+    - rescue: drop the reroute swap circuits (30 -> 18 qubits), then the fixed
+      purify circuit; the reroute strategy is reported as ``not_run``.
+
+    Raises ``pack.DoesNotFit`` (before anything is submitted) otherwise.
+    """
+    ip = copy.deepcopy(ip)
+    notes: list[str] = []
+    reduced = False
+    if level == "purify":
+        q = ip["purify"]
+        spec, mode = q["spec"], q["mode"]
+        best, _ = purify.choose_u(noise.bell_diag_of(spec))
+        wanted = tuple(_purify_us(spec, q["strategy"]))
+        ladder = list(dict.fromkeys([wanted, ("I",) if best == "I" else ("I", best), (best,)]))
+        hit = _first_fitting([(us, purify.build_purify(spec, us, None, mode)) for us in ladder], cap)
+        if hit is None:
+            raise pk.DoesNotFit(_width(purify.build_purify(spec, ladder[-1], None, mode)), cap, _hint(level, mode))
+        us, circuits = hit
+        if us != wanted:
+            reduced = True
+            q["us"] = list(us)
+            notes.append(f"IonQ reduced: one circuit holds at most {cap} qubits, so only U={list(us)} was "
+                         "run" + ("; the fixed-circuit baseline (U=I) was not measured" if "I" not in us else ""))
+    elif level == "rescue":
+        q = ip["rescue"]
+        options = [((rr, su), rescue.build_rescue(q["damage"], q["healthy_F"], q["mode"], rr, su)[0])
+                   for rr, su in ((True, False), (False, False), (False, True))]
+        hit = _first_fitting(options, cap)
+        if hit is None:
+            raise pk.DoesNotFit(_width(options[-1][1]), cap, _hint(level, q["mode"]))
+        (rr, su), circuits = hit
+        if not rr or su:
+            reduced = True
+            q["reroute"], q["single_u"] = rr, su
+            notes.append(f"IonQ reduced: one circuit holds at most {cap} qubits, so "
+                         + ("the reroute (swap) strategy was not run" if not rr else "")
+                         + (" and " if not rr and su else "")
+                         + ("only the predicted purify U was run" if su else "") + ".")
+    else:
+        circuits = level_circuits(level, ip)
+        if _width(circuits) > cap:
+            raise pk.DoesNotFit(_width(circuits), cap, _hint(level, ip.get(level, {}).get("mode")))
+    readout = False
+    if level in READOUT_LEVELS:
+        ro = build_readout()
+        if _width(circuits) + _width(ro) <= cap:
+            circuits, readout = circuits + ro, True
+        else:
+            notes.append("readout mitigation not applied: the calibration circuits do not fit "
+                         f"in {cap} qubits next to the level")
+    return circuits, ip, {"reduced": reduced, "notes": notes, "readout": readout}
+
+
+def _hint(level: str, mode: Any) -> str:
+    if mode == "teaching":
+        return f"{level} in teaching mode is too wide for one IonQ circuit; use mode='precision' or a larger backend"
+    return "use a backend with more qubits"
+
+
+def run_level_packed(
+    backend: Any, level: str, shots: int | None = None, seed: int = 0,
+    params: dict[str, Any] | None = None, before_run: Any = None, cap: int | None = None,
+    on_submit_error: Any = None,
+    **run_options: Any,
+) -> dict[str, Any]:
+    """Run ONE level as ONE packed circuit in ONE ``backend.run`` (IonQ path).
+
+    ``params`` are the level's own public parameters (as in ``full_batch``
+    ``params[level]``, angles in degrees); everything is validated and the width
+    checked BEFORE ``before_run`` is called, so a bad request never burns the
+    job. ``cap`` defaults to ``execute.ionq_max_qubits(backend)``. The result
+    follows the usual contract (``mode`` "batch"; ``counts`` keyed per original
+    sub-circuit, readout calibration included) plus ``circuits`` ending with the
+    packed circuit, ``packed`` (layout and raw counts), ``ionq_reduced`` and
+    ``ionq_note`` (a list, empty when nothing was reduced).
+    """
+    if level not in DECODED_LEVELS:
+        raise V.InputError(f"level must be one of {list(DECODED_LEVELS)}")
+    shots = V.shots(PACKED_SHOTS if shots is None else shots)
+    _, ip = resolve_params({level: V.py(params)} if params else None)
+    cap = ionq_max_qubits(backend) if cap is None else int(cap)
+    circuits, ip, plan = plan_packed(level, ip, cap)
+    counts, compiled, packed = run_packed(backend, circuits, shots, before_run=before_run,
+                                          on_submit_error=on_submit_error, **run_options)
+    readout = None
+    if plan["readout"]:
+        try:
+            readout = an.readout_rates(counts["readout_0000"], counts["readout_1111"], 4)
+        except Exception:  # noqa: BLE001 - calibration is optional for decoding
+            readout = None
+    qcs = [qc for qc in circuits if not qc.name.startswith("readout_")]
+    dec, pout, bo = decode_level(level, {n: counts[n] for n in counts}, ip, seed, readout)
+    dec["viz"]["notes"].extend(plan["notes"])
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    res = _package(level, dec, pout, f"{bo} | {packed['bit_order']}", qcs, counts, compiled,
+                   an.backend_name(backend), shots, stamp)
+    res["circuits"].append(packed["circuit"])
+    res["packed"] = {"layout": packed["layout"], "counts": packed["counts"], "cap": cap}
+    res["ionq_reduced"] = plan["reduced"]
+    res["ionq_note"] = plan["notes"]
+    return an.to_plain(res)

@@ -5,7 +5,7 @@ Contrato: llamadas **posicionales** `fn.callPromising(backend, ...)` (patrón pr
 ## Reglas
 
 - `backend` es una variable global que crea Qollab; nunca la crees.
-- Punto de entrada recomendado: `api.run_level.callPromising(backend, 'link', {shots: 1000})` (niveles: link, teleport, noise, swap, purify, qkd, rescue). En IonQ ejecuta un único trabajo y sirve los demás niveles desde caché.
+- Punto de entrada recomendado: `api.run_level.callPromising(backend, 'link', {shots: 1000})` (niveles: link, teleport, noise, swap, purify, qkd, rescue). En IonQ **1 Run = 1 nivel**: el proxy de IonQ en Qollab solo acepta trabajos de UN circuito (`ionq.circuit.v1`; con una lista de >1 circuitos devuelve `400 Only job type ionq.circuit.v1 is supported`), así que el nivel pedido se empaqueta en un solo circuito (sus circuitos lado a lado en qubits disjuntos, un registro clásico compartido, y los conteos se separan en Python). Un trabajo tarda ~13 s sin importar el tamaño. Volver a pedir el mismo nivel en el mismo Run se sirve desde caché (`cached_run: true`); otro nivel devuelve `ionq_job_used` (+ `fallback` grabado: etiquétalo como "recorded").
 - Convierte siempre con `proxy.toJs({dict_converter: Object.fromEntries})` y luego `proxy.destroy()`.
 - Estados de la UI: `ready` / `running` / `success` / `failed`. Nunca dejes "Running…" tras un error (usa `finally`).
 - Flag `busy`: desactiva todos los botones mientras corre una llamada.
@@ -14,6 +14,25 @@ Contrato: llamadas **posicionales** `fn.callPromising(backend, ...)` (patrón pr
 - Si `ok:false`: muestra `error` como texto Y, si existe `fallback` (no nulo), dibuja `fallback.result` con una etiqueta visible `recorded <backend> <timestamp>` (con texto, no solo color). Los errores de entrada del usuario (validación, argumentos desconocidos) traen `input_error: true` y no tienen `fallback`: solo muestra el error.
 - Si hay timeout: llama `api.load_recorded.callPromising()` y muestra `recorded[i].result.levels[nivel]` de la misma forma (con la etiqueta "recorded").
 - Con `code: "ionq_job_used"`: un solo trabajo IonQ por Run; indica "Pulsa Run de nuevo para un nuevo trabajo".
+- Con `code: "ionq_too_wide"` (`needed_qubits`, `max_qubits`): el nivel no cabe en un circuito del backend (ancho = `backend.num_qubits`, 29 en Forte sim, 25 en Aria); no se envió nada. Se debe mostrar el `fallback` grabado.
+- Si `params_ignored` es `true` (mismo nivel pedido otra vez con otros parámetros), la UI debe mostrar los `params` efectivos que devuelve el resultado, no los solicitados.
+- Si `viz.recommendation.incomplete` es `true` (rescue reducido), hay estrategias no medidas (`recommendation.not_measured`, p. ej. `["reroute"]`): la recomendación solo cubre las medidas y el mensaje lo dice. Cada estrategia en `viz.strategies` con `status: "not_run"` tiene la misma forma que las medidas, sin `null` que formatear: `fidelity` y `raw_pairs` son métricas con el valor TEÓRICO, `measured: false` y `label: "theory only (not measured)"` (muéstralo así, nunca como medido), más `theory_meets_target` (bool) y `explanation`. Estados posibles: `ok`, `no_data`, `not_run`.
+- Un envío rechazado (`backend.run` lanza error) NO gasta el Run: se puede reintentar en el mismo Run. Si el trabajo fue aceptado y falla después, sí queda gastado (`ionq_job_used`).
+- En IonQ el resultado trae `source: "ionq_packed"`, `circuits[-1]` = circuito empaquetado (`id: "packed"`), `packed` (layout, conteos crudos), `bit_order` con el layout empaquetado y `counts` por sub-circuito original. Si el nivel se tuvo que reducir: `ionq_reduced: true` + `ionq_note` (lista): muéstralo. `full_batch` ya no funciona en IonQ (`ionq_use_run_level`, sin enviar nada); y los botones sueltos `level_*` tampoco.
+
+### Qubits del circuito empaquetado con los parámetros por defecto
+
+| Nivel | Qubits | Notas |
+|---|---|---|
+| link | 14 | 6 + calibración de lectura (8): con mitigación de lectura |
+| teleport | 15 | |
+| noise | 14 | 6 + lectura (8) |
+| swap | 12 | |
+| qkd | 18 | |
+| purify | 27 | reducido: tomografía + solo la U predicha (sin la línea base U=I); no cabe en Aria (25) -> `ionq_too_wide` |
+| rescue | 18 (30 si el backend tiene >=30) | reducido: sin la estrategia `reroute` (`status: "not_run"`) |
+
+La mitigación de lectura solo se aplica a link y noise, y solo si la calibración cabe junto al nivel (si no, nota en `viz.notes`).
 
 ## Importante: el código de nivel superior de `main.js` NUNCA debe terminar (IonQ)
 
