@@ -1,6 +1,9 @@
 // Smoke harness: calls every public function of quantum.api and shows ok/error/code and timings.
 // `backend` is a global created by Qollab. Calls are POSITIONAL (the proven pattern:
 // fn.callPromising(backend, ...)); only the diagnose button also tries callPromisingKwargs.
+// Qollab only resolves STATIC imports of Python modules (dynamic import('quantum.api') fails);
+// if this import fails the page never leaves the "Loading..." status set in index.html.
+import * as api from 'quantum.api';
 const status = document.getElementById('status');
 const out = document.getElementById('out');
 const log = document.querySelector('#log tbody');
@@ -90,15 +93,6 @@ function addButton(label, call) {
 }
 
 async function main() {
-  let api;
-  try {
-    api = await import('quantum.api');
-  } catch (err) {
-    status.textContent = `FAILED to import quantum.api: ${err}`;
-    out.textContent = String(err?.stack ?? err);
-    addRow('import quantum.api', false, String(err), 0);
-    return;
-  }
   const pos = (fn, ...args) => () => fn.callPromising(backend, ...args);
   const shots = { shots: 300 };
 
