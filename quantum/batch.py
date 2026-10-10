@@ -86,11 +86,11 @@ def resolve_params(params: dict[str, Any] | None) -> tuple[dict[str, dict], dict
     user = V.py(params) or {}
     for level, vals in user.items():
         if level not in pub:
-            raise ValueError(f"unknown level {level!r}")
+            raise V.InputError(f"unknown level {level!r}")
         vals = dict(V.py(vals))
         unknown = set(vals) - set(pub[level])
         if unknown:
-            raise ValueError(f"unknown parameters for {level}: {sorted(unknown)}")
+            raise V.InputError(f"unknown parameters for {level}: {sorted(unknown)}")
         if level == "purify" and any(vals.get(k) is not None for k in ("F", "gamma", "p")):
             for k in ("F", "gamma", "p"):  # a chosen noise replaces the default one
                 pub[level][k] = None
@@ -113,7 +113,7 @@ def resolve_params(params: dict[str, Any] | None) -> tuple[dict[str, dict], dict
     spec_kw = V.spec_args(pu["F"], pu["gamma"], pu["p"])
     mode = V.choice("purify.mode", pu["mode"], MODES)
     if mode == "precision" and "gamma" in spec_kw:
-        raise ValueError("purify precision mode supports only Pauli channels (F or p)")
+        raise V.InputError("purify precision mode supports only Pauli channels (F or p)")
     internal["purify"] = {
         "spec": noise.make_spec(**spec_kw), "spec_args": spec_kw, "mode": mode,
         "strategy": V.choice("purify.strategy", pu["strategy"], ("all", "predicted")),
@@ -121,7 +121,7 @@ def resolve_params(params: dict[str, Any] | None) -> tuple[dict[str, dict], dict
     hf = V.py(rc["healthy_F"])
     healthy = [V.num("rescue.healthy_F", f, 0.25, 1.0) for f in (hf if isinstance(hf, (list, tuple)) else [hf])]
     if len(healthy) not in (1, 2):
-        raise ValueError("rescue.healthy_F must be one value or two")
+        raise V.InputError("rescue.healthy_F must be one value or two")
     internal["rescue"] = {
         "broken": geo.normalize_link(rc["broken"]), "damage": _internal_damage(rc["damage"]),
         "healthy_F": healthy[0] if len(healthy) == 1 else healthy,

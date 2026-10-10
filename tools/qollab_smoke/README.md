@@ -7,7 +7,7 @@ Herramienta desechable para comprobar en Qollab que cada función pública de `q
 1. Desde la raíz del repo: `tools/build_smoke.sh` (crea `dist/qollab_smoke/`).
 2. Sube el contenido de `dist/qollab_smoke/` como un proyecto JS nuevo en Qollab (`index.html`, `main.js`, `main.css`, `quantum/`, `data/`, `requirements.txt` en la raíz). Rutas de archivos: máx. 100 archivos, 2 MB cada uno.
 3. Elige el backend en "Select QPU" y pulsa Run. Qollab crea la variable global `backend` (mismo patrón que `preflight/qollab_probe`): el JS la pasa de forma POSICIONAL (`fn.callPromising(backend, ...)`, patrón probado). `run_level` recibe un dict de parámetros: `run_level.callPromising(backend, 'link', {shots: 300})`.
-- [ ] Pulsa primero "Diagnose backend": muestra la llamada posicional y la de `callPromisingKwargs({backend})`; `kwargs_works` dice si los kwargs funcionan.
+- [ ] Pulsa primero "Diagnose backend": hace dos llamadas posicionales seguidas y una con `callPromisingKwargs({backend})`. `same_object` debe ser YES; **si es NO, avisa a Claude de inmediato** (la protección por backend no funcionaría). `kwargs_works` dice si los kwargs funcionan.
 
 ## Lista de comprobación
 
@@ -19,7 +19,7 @@ BasicSimulator:
 Simulador IonQ Aria (un trabajo por ejecución; pulsa Stop y Run entre pruebas si quieres repetir):
 - [ ] `run_level link`, `run_level swap`, `run_level rescue` seguidos: OK los tres, con `source: ionq_batch_cache`, y solo se envía un trabajo.
 - [ ] `full_batch`: debe fallar con `ionq_job_used` (esperado, es la protección).
-- [ ] Después de los pasos anteriores, pulsa Stop y Run otra vez (reutiliza Pyodide o no?), luego "Diagnose backend": comprueba si `ionq_job_used` vuelve a `false`. Si sigue en `true`, el estado del módulo persiste entre ejecuciones y hay que replantear la protección.
+- [ ] La protección es POR OBJETO backend (Qollab crea uno nuevo en cada Run): después de los pasos anteriores pulsa Stop y Run otra vez y luego "Diagnose backend"; se espera `ionq_job_used: false` (backend nuevo). Dentro de la misma ejecución debe seguir en `true`.
 - [ ] Los botones `level_*` sueltos deben dar `ionq_use_full_batch` (esperado).
 - [ ] En una ejecución nueva: `full_batch` y luego `export_result` (último resultado). Guarda el JSON descargado como `data/recorded/ionq_aria_sim_full.json` y registra un opener en `quantum/api.py`:
   `def _open_ionq_aria_sim_full(): return open("data/recorded/ionq_aria_sim_full.json", encoding="utf-8")` (ruta LITERAL) y añádelo a `RECORDED_OPENERS`.

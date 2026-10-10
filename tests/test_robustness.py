@@ -185,7 +185,7 @@ def test_compile_failure_does_not_burn_the_ionq_job(monkeypatch):
     monkeypatch.setattr(execute, "compile_for", boom)
     assert api.run_level(be, "link")["ok"] is False
     assert api.rescue(be, 300)["ok"] is False
-    assert api._IONQ_JOB_USED is False and Counting.runs == 0
+    assert api._IONQ['used'] is False and Counting.runs == 0
     monkeypatch.undo()
     assert api.run_level(be, "link")["ok"] and Counting.runs == 1
 
@@ -206,3 +206,104 @@ def test_purify_channel_precedence_and_precision_default():
     assert api.level_purify(be, FAST, F=0.7, p=[0.8, 0, 0.2, 0])["ok"] is False
     out = api.level_purify(be, FAST, mode="precision")
     assert out["ok"], out.get("error")
+
+
+def test_guard_is_per_backend_object():
+    a = ionq_counting()
+    assert api.run_level(a, "link")["ok"] and Counting.runs == 1
+    assert api.full_batch(a)["code"] == "ionq_job_used"
+    assert api.backend_diag(a)["ionq_job_used"] is True
+    b = Counting()
+    b.name = "ionq_simulator"
+    assert api.backend_diag(b)["ionq_job_used"] is False
+    assert api.run_level(b, "swap")["ok"] and Counting.runs == 2  # new Run, new backend: allowed
+    assert api.backend_diag(b)["ionq_job_used"] is True
+
+
+def test_positional_contract():
+    be = BasicSimulator()
+    assert api.run_level(be, "swap", {"F1": 0.9, "shots": FAST})["ok"]
+    assert api.full_batch(be, FAST, 1, {"swap": {"F1": 0.9}})["ok"]
+    assert api.level_swap(be, FAST, 0.9, 0.8)["ok"]
+
+
+def test_fallback_on_failure_and_none_for_input_errors(monkeypatch):
+    a = ionq_counting()
+    assert api.run_level(a, "link")["ok"]
+    out = api.rescue(a)  # job already used -> raw failure, not run_level
+    assert out["code"] == "ionq_job_used"
+    # rescue first, then run_level: job used without cache -> fallback to the recorded level
+    b = ionq_counting()
+    assert api.rescue(b, 300)["ok"]
+    out = api.run_level(b, "swap")
+    assert out["ok"] is False and out["code"] == "ionq_job_used"
+    fb = out["fallback"]
+    assert fb["source"] == "recorded" and fb["mode"] == "recorded" and fb["result"]["level"] == "swap"
+    assert fb["result"]["ok"] and fb["backend"] and fb["timestamp"] and fb["file"]
+    json.dumps(out)
+    # caller mistakes keep a plain failure
+    for call in (lambda: api.run_level(BasicSimulator(), "swap", {"F1": 5}),
+                 lambda: api.run_level(BasicSimulator(), "bogus"),
+                 lambda: api.run_level(BasicSimulator(), "link", {"nope": 1})):
+        r = call()
+        assert r["ok"] is False and "fallback" not in r and r["input_error"] is True
+    # missing recordings: fallback is None, never raises
+    monkeypatch.setattr(api, "RECORDED_OPENERS", {})
+    c = ionq_counting()
+    assert api.rescue(c, 300)["ok"]
+    assert api.run_level(c, "link")["fallback"] is None
+
+
+def test_fallback_prefers_ionq_recording(monkeypatch):
+    def ionq_rec():
+        import io
+        data = {"backend": "ionq_simulator", "timestamp": "t",
+                "levels": {"link": {"ok": True, "level": "link", "mode": "batch", "backend": "ionq_simulator",
+                                    "timestamp": "t"}}}
+        return io.StringIO(json.dumps(data))
+
+    monkeypatch.setitem(api.RECORDED_OPENERS, "ionq_aria_sim_full", ionq_rec)
+    b = ionq_counting()
+    assert api.rescue(b, 300)["ok"]
+    fb = api.run_level(b, "link")["fallback"]
+    assert fb["file"] == "ionq_aria_sim_full" and fb["mode"] == "recorded" and fb["backend"] == "ionq_simulator"
+
+
+def test_internal_value_errors_get_fallback_but_input_errors_do_not(monkeypatch):
+    from quantum import batch, execute
+
+    def boom(*a, **k):
+        raise ValueError("internal decode problem")
+
+    be = BasicSimulator()
+    monkeypatch.setattr(execute, "run_batch", boom)
+    monkeypatch.setattr("quantum.links.run_link", boom)
+    out = api.run_level(be, "link", {"shots": FAST})
+    assert out["ok"] is False and "input_error" not in out
+    assert out["fallback"]["source"] == "recorded" and out["fallback"]["result"]["level"] == "link"
+    monkeypatch.undo()
+    # decoder failure on IonQ batch path
+    monkeypatch.setattr(batch, "decode_level", boom)
+    ion = ionq_counting()
+    out = api.run_level(ion, "swap")
+    assert out["ok"] is False and "input_error" not in out and out["fallback"] is not None
+    monkeypatch.undo()
+    for call in (lambda: api.run_level(be, "swap", {"F1": 9}),
+                 lambda: api.run_level(be, "swap", {"F9": 1}),
+                 lambda: api.run_level(be, "nope"),
+                 lambda: api.run_level(None, "link")):
+        r = call()
+        assert r["ok"] is False and r["input_error"] is True and "fallback" not in r
+
+
+def test_backend_diag_identity_fields():
+    api._LAST_DIAG["backend"] = None
+    be = BasicSimulator()
+    a = api.backend_diag(be)
+    assert a["same_object_as_last_diag"] is None
+    assert api.backend_diag(be)["same_object_as_last_diag"] is True
+    assert api.backend_diag(BasicSimulator())["same_object_as_last_diag"] is False
+    ion = ionq_counting()
+    api.run_level(ion, "link")
+    assert api.backend_diag(ion)["guard_key_matches"] is True
+    assert api.backend_diag(BasicSimulator())["guard_key_matches"] is False

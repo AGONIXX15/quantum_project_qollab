@@ -103,14 +103,21 @@ async function main() {
   const shots = { shots: 300 };
 
   addButton('Diagnose backend', async () => {
+    // Two positional calls in a row: same_object tells whether JS hands Python the SAME backend object.
     const a = toPlain(await api.backend_diag.callPromising(backend));
-    let b;
+    const b = toPlain(await api.backend_diag.callPromising(backend));
+    let k;
     try {
-      b = toPlain(await api.backend_diag.callPromisingKwargs({ backend }));
+      k = toPlain(await api.backend_diag.callPromisingKwargs({ backend }));
     } catch (err) {
-      b = { ok: false, error: `kwargs call threw: ${err}` };
+      k = { ok: false, error: `kwargs call threw: ${err}` };
     }
-    return { ok: !!(a && a.ok), positional: a, kwargs: b, kwargs_works: !!(b && b.ok) };
+    const same = b?.same_object_as_last_diag;
+    return {
+      ok: !!(a && a.ok && b && b.ok),
+      same_object: same === true ? 'YES (guard can work)' : 'NO - TELL CLAUDE IMMEDIATELY (guard would not work)',
+      positional_1: a, positional_2: b, kwargs: k, kwargs_works: !!(k && k.ok),
+    };
   });
   addButton('info', () => api.info.callPromising());
   [['link', api.level_link], ['teleport', api.level_teleport], ['noise', api.level_noise],

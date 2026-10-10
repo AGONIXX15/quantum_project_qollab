@@ -31,6 +31,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from .validate import InputError
+
 EARTH_RADIUS_KM = 6371.0088
 FIBER_ROUTE_FACTOR = 1.3
 LOSS_DB_PER_KM = 0.2
@@ -100,7 +102,7 @@ def normalize_link(link_id: str) -> str:
         for cand in LINK_IDS:
             if set(cand.split("-")) == set(parts):
                 return cand
-    raise ValueError(f"unknown link {link_id!r}; use one of {list(LINK_IDS)}")
+    raise InputError(f"unknown link {link_id!r}; use one of {list(LINK_IDS)}")
 
 
 def third_city(link_id: str) -> str:

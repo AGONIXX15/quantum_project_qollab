@@ -16,8 +16,19 @@ level directly; on IonQ it runs ``full_batch`` once, caches it, and serves every
 level from the cache (one job per Python execution; later IonQ jobs are refused
 with the code ``ionq_job_used``).
 
-From JS: ``import * as api from 'quantum.api'`` and call with
-``.callPromisingKwargs({...})`` then ``.toJs()``.
+From JS (positional calls are the documented contract; they are the pattern
+proven on Qollab)::
+
+    import * as api from 'quantum.api';
+    const proxy = await api.run_level.callPromising(backend, 'link', {shots: 1000});
+    const res = proxy.toJs({dict_converter: Object.fromEntries});
+    proxy.destroy();
+
+``backend`` is the global Qollab creates. Passing the backend through
+``callPromisingKwargs({backend, ...})`` is UNVERIFIED on Qollab (use
+``backend_diag`` to test it). Every backend-taking function accepts the backend
+first, then positional arguments, then a params dict where relevant:
+``run_level(backend, level, params)``, ``full_batch(backend, shots, seed, params)``.
 
 References:
     - Qollab JS projects: https://qollab.xyz/learn/docs/js-qiskit-projects
@@ -27,6 +38,7 @@ References:
 from __future__ import annotations
 
 import functools
+import inspect
 import json
 import math
 from typing import Any, Callable
@@ -48,36 +60,56 @@ _D = batch.DEFAULT_PARAMS  # single source of truth for every default below
 
 _PRECISION_PURIFY_F = 0.8  # default channel of purify in precision mode
 
-# One IonQ job per Python execution: set right before backend.run is attempted.
-_IONQ_JOB_USED = False
-_IONQ_CACHE: dict[str, Any] | None = None
+# One IonQ job per backend object (Qollab creates a new backend on every Run, so a new
+# Run starts clean even if Pyodide persists). Only the latest backend is kept; a strong
+# reference to it prevents id recycling. ``used`` is set right before backend.run.
+_IONQ: dict[str, Any] = {"key": None, "backend": None, "used": False, "cache": None}
 
 
 def _reset_ionq_state() -> None:
     """Forget the IonQ job flag and cache (tests only)."""
-    global _IONQ_JOB_USED, _IONQ_CACHE
-    _IONQ_JOB_USED = False
-    _IONQ_CACHE = None
+    _IONQ.update(key=None, backend=None, used=False, cache=None)
 
 
-def _cache_summary() -> dict[str, Any] | None:
+def _ionq_state(backend: Any) -> dict[str, Any]:
+    """The IonQ state of ``backend`` (reset when a different backend object shows up)."""
+    if _IONQ["backend"] is not backend or _IONQ["key"] != id(backend):
+        _IONQ.update(key=id(backend), backend=backend, used=False, cache=None)
+    return _IONQ
+
+
+def _cache_summary(state: dict[str, Any]) -> dict[str, Any] | None:
     """Slim view of the cached IonQ job (level ok flags, backend, timestamp)."""
-    c = _IONQ_CACHE
+    c = state["cache"]
     if not c:
         return None
     return {"backend": c.get("backend"), "timestamp": c.get("timestamp"), "shots": c.get("shots"),
             "levels": {k: bool(v.get("ok")) for k, v in (c.get("levels") or {}).items()}}
 
 
-def _ionq_used() -> dict[str, Any]:
-    return {"ok": False, "code": IONQ_USED_CODE, "error": IONQ_USED_MESSAGE, "cached": _cache_summary()}
+def _ionq_used(state: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": False, "code": IONQ_USED_CODE, "error": IONQ_USED_MESSAGE, "cached": _cache_summary(state)}
+
+
+_LAST_DIAG: dict[str, Any] = {"backend": None}
 
 
 def backend_diag(backend: Any) -> dict[str, Any]:
-    """Describe the backend object and the IonQ job flag (diagnostics; never raises)."""
+    """Describe the backend object and the IonQ job flag (diagnostics; never raises).
+
+    ``same_object_as_last_diag`` is None on the first call, else whether JS handed Python the
+    same backend object as in the previous diag call; ``guard_key_matches`` tells whether this
+    backend is the one the IonQ guard is currently keyed on (None if the guard has not seen one).
+    If same_object is False across calls within one Run, the per-backend guard cannot work.
+    """
     try:
-        return {"ok": True, "module": type(backend).__module__, "name": str(getattr(backend, "name", None)),
-                "is_ionq": bool(an.is_ionq(backend)), "ionq_job_used": _IONQ_JOB_USED}
+        last = _LAST_DIAG["backend"]
+        same = None if last is None else last is backend
+        _LAST_DIAG["backend"] = backend
+        keyed = _IONQ["backend"]
+        return {"ok": True, "same_object_as_last_diag": same,
+                "guard_key_matches": None if keyed is None else keyed is backend, "module": type(backend).__module__, "name": str(getattr(backend, "name", None)),
+                "is_ionq": bool(an.is_ionq(backend)), "ionq_job_used": bool(_ionq_state(backend)["used"])}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -99,14 +131,17 @@ def _guard(needs_backend: bool = True, ionq_ok: bool = False) -> Callable:
                 backend = args[0] if args else kwargs.get("backend")
                 if needs_backend:
                     if backend is None:
-                        raise ValueError("a backend is required")
+                        raise V.InputError("a backend is required")
                     if an.is_ionq(backend) and not ionq_ok:
                         return {"ok": False, "error": IONQ_MESSAGE, "code": IONQ_CODE}
                 out = fn(*args, **kwargs)
                 return {"ok": True, **an.to_plain(out)}
             except Exception as exc:  # noqa: BLE001 - the UI must never hang
                 msg = str(exc) if isinstance(exc, ValueError) else f"{type(exc).__name__}: {exc}"
-                return {"ok": False, "error": msg}
+                env = {"ok": False, "error": msg}
+                if isinstance(exc, V.InputError):
+                    env["input_error"] = True  # the caller's mistake: no recorded fallback
+                return env
         return wrapper
     return deco
 
@@ -248,7 +283,7 @@ def level_purify(
             gamma = _D["purify"]["gamma"]
     spec = _spec_args(F, gamma, p)
     if mode == "precision" and "gamma" in spec:
-        raise ValueError("precision mode only supports Pauli channels (F or p); use teaching for gamma")
+        raise V.InputError("precision mode only supports Pauli channels (F or p); use teaching for gamma")
     return purify.run_purify(
         backend, _shots(shots), strategy=_choice("strategy", strategy, ("all", "predicted")),
         mode=mode, seed=int(seed), **spec,
@@ -262,7 +297,7 @@ def level_qkd(
 ) -> dict[str, Any]:
     theta = math.radians(_num("theta_deg", theta_deg, 0, 180))
     if F is not None and theta != 0.0:
-        raise ValueError("use either a spy (theta_deg) or Werner noise (F), not both")
+        raise V.InputError("use either a spy (theta_deg) or Werner noise (F), not both")
     return qkd.run_qkd(
         backend, _shots(shots), theta, None if F is None else _num("F", F, 0.25, 1.0),
         bool(smart_direct), int(seed), _choice("beta_source", beta_source, ("split", "oracle")),
@@ -291,33 +326,29 @@ def rescue(
         _choice("mode", mode, ("teaching", "precision")), int(seed),
     )
     if an.is_ionq(backend):
-        if _IONQ_JOB_USED:
-            return _ionq_used()
-        return _rescue.run_rescue(backend, *args, before_run=_mark_ionq_used)
+        state = _ionq_state(backend)
+        if state["used"]:
+            return _ionq_used(state)
+        return _rescue.run_rescue(backend, *args, before_run=lambda: state.update(used=True))
     return _rescue.run_rescue(backend, *args)
-
-
-def _mark_ionq_used() -> None:
-    global _IONQ_JOB_USED
-    _IONQ_JOB_USED = True
 
 
 def _run_batch_once(backend: Any, shots: int | None, seed: int, params: Any) -> dict[str, Any]:
     """``batch.run_full_batch`` with the IonQ one-job guard and cache (plain dict result)."""
-    global _IONQ_CACHE
     n = None if shots is None else _shots(shots)
     ionq = an.is_ionq(backend)
     if ionq:
-        if _IONQ_JOB_USED:
-            return _ionq_used()
+        state = _ionq_state(backend)
+        if state["used"]:
+            return _ionq_used(state)
         batch.resolve_params(_py(params))  # validate first: a typo must not burn the job
         # the flag is set right before backend.run (compile errors do not burn the job)
         out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params),
-                                               before_run=_mark_ionq_used))
+                                               before_run=lambda: state.update(used=True)))
     else:
         out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params)))
     if ionq:
-        _IONQ_CACHE = out
+        state["cache"] = out
     return out
 
 
@@ -333,7 +364,7 @@ def _batch_params(level: str, p: dict[str, Any]) -> dict[str, Any]:
     """Map the flat API arguments of one level to ``full_batch`` ``params[level]``."""
     p = dict(p)
     if level == "qkd" and p.get("F") is not None:
-        raise ValueError("on IonQ the spy level (qkd) does not support Werner noise F; use theta_deg")
+        raise V.InputError("on IonQ the spy level (qkd) does not support Werner noise F; use theta_deg")
     if level == "qkd":
         p.pop("F", None)
     if level == "purify":
@@ -348,7 +379,6 @@ def _batch_params(level: str, p: dict[str, Any]) -> dict[str, Any]:
     return p
 
 
-@_guard(ionq_ok=True)
 def run_level(backend: Any, level: str, params: Any = None, **kw: Any) -> dict[str, Any]:
     """Recommended UI entry point: run one level, safe to click on any backend.
 
@@ -361,20 +391,60 @@ def run_level(backend: Any, level: str, params: Any = None, **kw: Any) -> dict[s
     ``source: "ionq_batch_cache"`` and ``batch_ok``; later calls are served from
     the cache without any new job (their ``params`` are ignored and flagged by
     ``params_ignored``). Known limit: ``F`` for qkd is not available on IonQ.
+
+    Recorded fallback: if the result is ``ok: False`` for any reason other than
+    the caller's own input (InputError validation, unknown argument; those carry
+    ``input_error: True`` and no fallback), ``fallback`` holds the recorded run of
+    this level (IonQ recording preferred, else the BasicSimulator one) as
+    ``{"source": "recorded", "file", "mode", "backend", "timestamp", "result"}``,
+    or ``None`` if no recording can be read. The UI must label it as recorded.
     """
+    out = _run_level_live(backend, level, params, **kw)
+    if not out.get("ok") and not out.get("input_error"):
+        out = {**out, "fallback": _recorded_fallback(level)}
+    return out
+
+
+def _recorded_fallback(level: Any) -> dict[str, Any] | None:
+    """Recorded result of ``level`` (IonQ recording first); None if unavailable. Never raises."""
+    try:
+        names = sorted(RECORDED_OPENERS, key=lambda n: "ionq" not in n.lower())
+        for name in names:
+            try:
+                with RECORDED_OPENERS[name]() as fh:
+                    run = _mark_recorded(json.load(fh))
+                lv = run["levels"][level]
+            except Exception:  # noqa: BLE001 - try the next recording
+                continue
+            if lv.get("ok"):
+                return {"source": "recorded", "file": name, "mode": "recorded",
+                        "backend": lv.get("backend", run.get("backend")),
+                        "timestamp": lv.get("timestamp", run.get("timestamp")), "result": lv}
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+@_guard(ionq_ok=True)
+def _run_level_live(backend: Any, level: str, params: Any = None, **kw: Any) -> dict[str, Any]:
     level = _choice("level", level, RUN_LEVELS)
     params = {**(_py(params) or {}), **kw}  # positional dict (JS) merged with keyword arguments
+    try:  # unknown / misspelled arguments are the caller's mistake
+        inspect.signature(LEVEL_FUNCS[level]).bind(backend, **params)
+    except TypeError as exc:
+        raise V.InputError(f"invalid arguments for level {level!r}: {exc}") from None
     if not an.is_ionq(backend):
         return LEVEL_FUNCS[level](backend, **params)
     shots, seed = params.pop("shots", None), params.pop("seed", 0)
-    fresh = _IONQ_CACHE is None
+    state = _ionq_state(backend)
+    fresh = state["cache"] is None
     if fresh:
         bp = _batch_params(level, params)
         res = _run_batch_once(backend, shots, seed, {level: bp} if bp else None)
         if res.get("ok") is False:
             return res
     else:
-        res = _IONQ_CACHE
+        res = state["cache"]
     lv = res["levels"].get(level)
     out = {"ok": True, "source": "ionq_batch_cache", "batch_ok": all(
         v.get("ok") for v in res["levels"].values()), "cached_run": not fresh}
@@ -459,11 +529,11 @@ MAX_EXPORT_BYTES = 2_000_000
 def export_result(result: Any, filename: str = "entangle-the-andes-result.json") -> dict[str, Any]:
     """Send a result to the browser as a download (no-op outside Qollab)."""
     if not isinstance(filename, str) or not filename.endswith(".json") or "/" in filename or not filename[:-5]:
-        raise ValueError("filename must be a plain name ending in .json")
+        raise V.InputError("filename must be a plain name ending in .json")
     data = json.dumps(an.to_plain(_py(result)), indent=2)
     size = len(data.encode("utf-8"))
     if size > MAX_EXPORT_BYTES:
-        raise ValueError(f"result is {size} bytes; the Qollab file limit is 2 MB")
+        raise V.InputError(f"result is {size} bytes; the Qollab file limit is 2 MB")
     try:
         from js import sendFile  # type: ignore[import-not-found]
     except ImportError:
