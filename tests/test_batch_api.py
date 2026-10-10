@@ -353,8 +353,7 @@ def test_api_ok_envelope_and_json():
     lambda be: api.level_noise(be, 500, [2.0]),
     lambda be: api.level_noise(be, 500, [0.9], mode="bogus"),
     lambda be: api.level_swap(be, 500, 0.1, 0.9),
-    lambda be: api.level_purify(be, 500),
-    lambda be: api.level_purify(be, 500, F=0.8, gamma=0.1),
+    lambda be: api.level_purify(be, 500, F=0.8, p=[0.5, 0.5, 0, 0]),
     lambda be: api.level_purify(be, 500, p=[0.5, 0.5, 0.5, 0.5]),
     lambda be: api.level_purify(be, 500, gamma=0.2, mode="precision"),
     lambda be: api.level_qkd(be, 500, 90, F=0.9),
@@ -375,11 +374,14 @@ def test_api_ionq_refusal_and_one_job():
     be = Counting()
     be.name = "ionq_simulator"
     Counting.runs = 0
+    api._reset_ionq_state()
     out = api.full_batch(be)
     assert out["ok"] and out["mode"] == "batch" and Counting.runs == 1 and out["shots"] == 500
     json.dumps(out)
-    # rescue is a single job (<= 16 circuits): allowed on IonQ
+    # rescue is a single job (<= 16 circuits): allowed on IonQ, but only one job per execution
     Counting.runs = 0
+    assert api.rescue(be, 300)["code"] == "ionq_job_used" and Counting.runs == 0
+    api._reset_ionq_state()
     out = api.rescue(be, 300)
     assert out["ok"] and Counting.runs == 1 and out["backend"] == "ionq_simulator"
 
@@ -395,7 +397,7 @@ def test_api_info_and_files():
     assert by["qkd"]["params"]["theta_deg"]["default"] == d["qkd"]["theta_deg"]
     assert i["full_batch"]["default_params"] == d and "degrees" in i["full_batch"]["params_schema"]
     rec = api.load_recorded()
-    assert rec["ok"] and rec["recorded"] == [] and rec["files"] == []
+    assert rec["ok"] and rec["files"] == list(api.RECORDED_OPENERS)
     exp = api.export_result({"a": 1})
     assert exp["ok"] and exp["exported"] is False  # no `js` module locally
     for bad in ("x.txt", "../x.json", ".json", ""):

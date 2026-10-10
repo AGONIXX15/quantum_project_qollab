@@ -20,7 +20,7 @@ References:
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Callable
 
 from qiskit import QuantumCircuit, transpile
 from qiskit.transpiler.passes import RemoveBarriers
@@ -104,13 +104,14 @@ def run_batch(
     circuits: list[QuantumCircuit],
     shots: int = 1000,
     seed: int = 1234,
+    before_run: Callable[[], None] | None = None,
     **run_options: Any,
 ) -> tuple[dict[str, Counts], dict[str, dict[str, int]]]:
     """Compile and run every circuit in a single ``backend.run``.
 
     Returns ``(counts, compiled)`` keyed by ``circuit.name`` (unique, only
     [A-Za-z0-9_-]). ``compiled[name]`` has ``compiled_two_qubit_gates`` and
-    ``compiled_depth``. ``seed`` seeds the transpiler; ``run_options`` (e.g.
+    ``compiled_depth``. ``seed`` seeds the transpiler; ``before_run`` is called right before ``backend.run``; ``run_options`` (e.g.
     ``seed_simulator``) are forwarded to ``run`` untouched.
     """
     names = [qc.name for qc in circuits]
@@ -123,6 +124,8 @@ def run_batch(
         # contain spaces and clbit i is always character -1-i of the key.
         assert len(qc.cregs) == 1, f"{qc.name}: expected a single classical register"
     compiled = compile_for(backend, circuits, seed)
+    if before_run is not None:
+        before_run()  # called after compilation, immediately before the (single) submit
     result = backend.run(compiled, shots=shots, **run_options).result()
     counts = {name: dict(result.get_counts(i)) for i, name in enumerate(names)}
     info = {}

@@ -1,0 +1,131 @@
+// Smoke harness: calls every public function of quantum.api and shows ok/error/code and timings.
+// `backend` is a global created by Qollab. Calls are POSITIONAL (the proven pattern:
+// fn.callPromising(backend, ...)); only the diagnose button also tries callPromisingKwargs.
+const status = document.getElementById('status');
+const out = document.getElementById('out');
+const log = document.querySelector('#log tbody');
+const holder = document.getElementById('buttons');
+const TIMEOUT_MS = 180000;
+let lastResult = null;
+let busy = false;
+const buttons = [];
+
+function backendName() {
+  try {
+    return String(backend.name ?? backend.constructor?.name ?? 'unknown');
+  } catch (err) {
+    return 'unavailable';
+  }
+}
+document.getElementById('backend-name').textContent = backendName();
+
+function addRow(label, ok, detail, ms) {
+  const tr = document.createElement('tr');
+  [label, ok ? 'OK' : 'FAILED', detail, String(ms)].forEach((text) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    tr.appendChild(td);
+  });
+  log.prepend(tr);
+}
+
+function setBusy(value) {
+  busy = value;
+  buttons.forEach((b) => { b.disabled = value; });
+}
+
+function toPlain(proxy) {
+  const res = proxy && typeof proxy.toJs === 'function'
+    ? proxy.toJs({ dict_converter: Object.fromEntries })
+    : proxy;
+  if (proxy && typeof proxy.destroy === 'function') proxy.destroy();
+  return res;
+}
+
+function show(res) {
+  const text = JSON.stringify(res, null, 1) ?? '';
+  out.textContent = text.length > 6000 ? `${text.slice(0, 6000)}\n... (truncated)` : text;
+}
+
+async function run(label, call) {
+  if (busy) return;
+  setBusy(true);
+  const t0 = performance.now();
+  const ticker = setInterval(() => {
+    status.textContent = `Running: ${label}... ${Math.round((performance.now() - t0) / 1000)} s`;
+  }, 1000);
+  status.textContent = `Running: ${label}...`;
+  let ok = false;
+  let detail = '';
+  let timer;
+  try {
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
+    });
+    const res = toPlain(await Promise.race([call(), timeout]));
+    lastResult = res;
+    ok = !!(res && res.ok);
+    detail = ok ? (res.source || res.mode || '') : `${res?.code ?? ''} ${res?.error ?? ''}`.trim();
+    show(res);
+  } catch (err) {
+    detail = String(err?.message) === 'timeout' ? `timeout after ${TIMEOUT_MS / 1000} s` : `JS exception: ${err}`;
+    out.textContent = String(err);
+  } finally {
+    clearTimeout(timer);
+    clearInterval(ticker);
+    const ms = Math.round(performance.now() - t0);
+    addRow(label, ok, detail, ms);
+    status.textContent = `${ok ? 'Done' : 'Failed'}: ${label} (${ms} ms)${ok ? '' : ` - ${detail}`}`;
+    setBusy(false);
+  }
+}
+
+function addButton(label, call) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = label;
+  b.addEventListener('click', () => run(label, call));
+  holder.appendChild(b);
+  buttons.push(b);
+}
+
+async function main() {
+  let api;
+  try {
+    api = await import('quantum.api');
+  } catch (err) {
+    status.textContent = `FAILED to import quantum.api: ${err}`;
+    out.textContent = String(err?.stack ?? err);
+    addRow('import quantum.api', false, String(err), 0);
+    return;
+  }
+  const pos = (fn, ...args) => () => fn.callPromising(backend, ...args);
+  const shots = { shots: 300 };
+
+  addButton('Diagnose backend', async () => {
+    const a = toPlain(await api.backend_diag.callPromising(backend));
+    let b;
+    try {
+      b = toPlain(await api.backend_diag.callPromisingKwargs({ backend }));
+    } catch (err) {
+      b = { ok: false, error: `kwargs call threw: ${err}` };
+    }
+    return { ok: !!(a && a.ok), positional: a, kwargs: b, kwargs_works: !!(b && b.ok) };
+  });
+  addButton('info', () => api.info.callPromising());
+  [['link', api.level_link], ['teleport', api.level_teleport], ['noise', api.level_noise],
+    ['swap', api.level_swap], ['purify', api.level_purify], ['qkd', api.level_qkd]]
+    .forEach(([n, fn]) => addButton(`level_${n} (defaults)`, pos(fn, 300)));
+  addButton('rescue (defaults)', pos(api.rescue, 300));
+  addButton('run_level link', pos(api.run_level, 'link', shots));
+  addButton('run_level swap', pos(api.run_level, 'swap', shots));
+  addButton('run_level rescue', pos(api.run_level, 'rescue', shots));
+  addButton('full_batch', pos(api.full_batch));
+  addButton('load_recorded', () => api.load_recorded.callPromising());
+  addButton('export_result (last result)', () => api.export_result.callPromising(lastResult ?? {}));
+  status.textContent = `Ready (Pyodide loaded ${(performance.now() / 1000).toFixed(1)} s after page start)`;
+}
+
+main().catch((err) => {
+  status.textContent = `FAILED: ${err}`;
+});

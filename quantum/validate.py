@@ -58,7 +58,12 @@ def spec_args(F: Any, gamma: Any, p: Any) -> dict[str, Any]:
 
 
 def f_list(name: str, v: Any, max_len: int = 5) -> list[float]:
-    fs = [num(name, f, 0.25, 1.0) for f in py(v)]
+    v = py(v)
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        v = [v]  # a single value is a one-element list
+    if not isinstance(v, (list, tuple)):
+        raise ValueError(f"{name}s must be a list of numbers")
+    fs = [num(name, f, 0.25, 1.0) for f in v]
     if not 1 <= len(fs) <= max_len:
         raise ValueError(f"{name}s must have 1 to {max_len} values")
     return fs

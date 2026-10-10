@@ -1,0 +1,4752 @@
+{
+ "ok": true,
+ "mode": "batch",
+ "backend": "basic_simulator",
+ "timestamp": "2026-10-10T01:42:39+00:00",
+ "shots": 1000,
+ "levels": {
+  "link": {
+   "ok": true,
+   "level": "link",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {},
+   "bit_order": "Qiskit little-endian; clbits: 0=A, 1=B",
+   "metrics": {
+    "corr_XX": {
+     "value": 1.0,
+     "ci95": [
+      0.992346202827219,
+      1.0
+     ],
+     "theory": 1.0,
+     "shots": 1000
+    },
+    "corr_YY": {
+     "value": -1.0,
+     "ci95": [
+      -1.0,
+      -0.992346202827219
+     ],
+     "theory": -1.0,
+     "shots": 1000
+    },
+    "corr_ZZ": {
+     "value": 1.0,
+     "ci95": [
+      0.992346202827219,
+      1.0
+     ],
+     "theory": 1.0,
+     "shots": 1000
+    },
+    "fidelity": {
+     "value": 1.0,
+     "ci95": [
+      0.99761144639459,
+      1.0
+     ],
+     "theory": 1.0,
+     "raw": 1.0
+    },
+    "corr_XX_readout_mitigated": {
+     "value": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ],
+     "theory": 1.0,
+     "clipped": false
+    },
+    "corr_YY_readout_mitigated": {
+     "value": -1.0,
+     "ci95": [
+      -1.0,
+      -1.0
+     ],
+     "theory": -1.0,
+     "clipped": false
+    },
+    "corr_ZZ_readout_mitigated": {
+     "value": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ],
+     "theory": 1.0,
+     "clipped": false
+    },
+    "fidelity_readout_mitigated": {
+     "value": 1.0,
+     "ci95": [
+      0.99761144639459,
+      1.0
+     ],
+     "theory": 1.0,
+     "raw": 1.0
+    }
+   },
+   "circuits": [
+    {
+     "id": "link_XX",
+     "qubits": 2,
+     "depth": 4,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "link_YY",
+     "qubits": 2,
+     "depth": 5,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "link_ZZ",
+     "qubits": 2,
+     "depth": 3,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 3
+    }
+   ],
+   "counts": {
+    "link_XX": {
+     "00": 480,
+     "11": 520
+    },
+    "link_YY": {
+     "01": 509,
+     "10": 491
+    },
+    "link_ZZ": {
+     "11": 489,
+     "00": 511
+    }
+   },
+   "viz": {
+    "samples": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "bloch": {
+     "A": {
+      "value": [
+       -0.040000000000000036,
+       -0.018000000000000016,
+       0.02200000000000002
+      ],
+      "ci95": [
+       [
+        -0.10165953588371734,
+        0.021965687770628572
+       ],
+       [
+        -0.07978306337989172,
+        0.04392083172900185
+       ],
+       [
+        -0.039931208315607813,
+        0.08376282477780639
+       ]
+      ]
+     },
+     "B": {
+      "value": [
+       -0.040000000000000036,
+       0.018000000000000016,
+       0.02200000000000002
+      ],
+      "ci95": [
+       [
+        -0.10165953588371734,
+        0.021965687770628572
+       ],
+       [
+        -0.04392083172900185,
+        0.07978306337989172
+       ],
+       [
+        -0.039931208315607813,
+        0.08376282477780639
+       ]
+      ]
+     },
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "leak": {
+     "value": 0.0,
+     "source": "circuit"
+    },
+    "notes": [
+     "readout mitigation assumes the identity logical-to-physical qubit mapping; calibration uncertainty is not propagated",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "link_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "link_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "link_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "teleport": {
+   "ok": true,
+   "level": "teleport",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "theta": 1.0471975511965976,
+    "phi": 0.5235987755982988,
+    "F": 0.8
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=Bob, 1=m_x (A), 2=m_z (q0)",
+   "metrics": {
+    "bob_X": {
+     "value": 0.55,
+     "ci95": [
+      0.49618745082016247,
+      0.5996029607348077
+     ],
+     "theory": 0.55
+    },
+    "bob_Y": {
+     "value": 0.348,
+     "ci95": [
+      0.288657727774041,
+      0.40467875080983107
+     ],
+     "theory": 0.31754264805429416
+    },
+    "bob_Z": {
+     "value": 0.372,
+     "ci95": [
+      0.31313647983982684,
+      0.42801630761189857
+     ],
+     "theory": 0.36666666666666675
+    },
+    "fidelity": {
+     "value": 0.8745942101292461,
+     "ci95": [
+      0.847355485190292,
+      0.9018329350682002
+     ],
+     "theory": 0.8666666666666667,
+     "raw": 0.8745942101292461,
+     "classical_bound": 0.6666666666666666
+    }
+   },
+   "circuits": [
+    {
+     "id": "tele_psi_F0p8_X",
+     "qubits": 5,
+     "depth": 8,
+     "two_qubit_gates": 5,
+     "compiled_two_qubit_gates": 5,
+     "compiled_depth": 7
+    },
+    {
+     "id": "tele_psi_F0p8_Y",
+     "qubits": 5,
+     "depth": 9,
+     "two_qubit_gates": 5,
+     "compiled_two_qubit_gates": 5,
+     "compiled_depth": 7
+    },
+    {
+     "id": "tele_psi_F0p8_Z",
+     "qubits": 5,
+     "depth": 7,
+     "two_qubit_gates": 5,
+     "compiled_two_qubit_gates": 5,
+     "compiled_depth": 6
+    }
+   ],
+   "counts": {
+    "tele_psi_F0p8_X": {
+     "010": 206,
+     "111": 189,
+     "101": 195,
+     "100": 48,
+     "000": 185,
+     "011": 54,
+     "110": 51,
+     "001": 72
+    },
+    "tele_psi_F0p8_Y": {
+     "110": 155,
+     "011": 175,
+     "111": 82,
+     "100": 82,
+     "010": 82,
+     "001": 80,
+     "000": 174,
+     "101": 170
+    },
+    "tele_psi_F0p8_Z": {
+     "010": 92,
+     "111": 168,
+     "011": 171,
+     "110": 78,
+     "000": 164,
+     "001": 88,
+     "100": 183,
+     "101": 56
+    }
+   },
+   "viz": {
+    "samples": [
+     1,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     0,
+     1,
+     0,
+     0,
+     0
+    ],
+    "bloch": {
+     "measured": [
+      0.55,
+      0.348,
+      0.372
+     ],
+     "ci95": [
+      [
+       0.49618745082016247,
+       0.5996029607348077
+      ],
+      [
+       0.288657727774041,
+       0.40467875080983107
+      ],
+      [
+       0.31313647983982684,
+       0.42801630761189857
+      ]
+     ],
+     "theory": [
+      0.55,
+      0.31754264805429416,
+      0.36666666666666675
+     ],
+     "input": [
+      0.75,
+      0.43301270189221924,
+      0.5000000000000001
+     ]
+    },
+    "leak": {
+     "value": 0.19999999999999996,
+     "source": "circuit"
+    },
+    "notes": [
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "tele_psi_F0p8_X": [
+      {
+       "name": "ry",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        1.0471975511965976
+       ]
+      },
+      {
+       "name": "rz",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982988
+       ]
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        0.3347646375212603
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "z",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "z",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cz",
+       "qubits": [
+        4,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ],
+     "tele_psi_F0p8_Y": [
+      {
+       "name": "ry",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        1.0471975511965976
+       ]
+      },
+      {
+       "name": "rz",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982988
+       ]
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        0.3347646375212603
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "z",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "z",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cz",
+       "qubits": [
+        4,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ],
+     "tele_psi_F0p8_Z": [
+      {
+       "name": "ry",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        1.0471975511965976
+       ]
+      },
+      {
+       "name": "rz",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982988
+       ]
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        0.3347646375212603
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "z",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        4
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "z",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": [
+        -5.601378048065955
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        3,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cz",
+       "qubits": [
+        4,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "noise": {
+   "ok": true,
+   "level": "noise",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "Fs": [
+     0.95,
+     0.8,
+     0.6
+    ],
+    "mode": "precision",
+    "channel": "simulated_pauli"
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=A, 1=B",
+   "metrics": {
+    "fidelity@0.95": {
+     "value": 0.9474999999999999,
+     "ci95": [
+      0.9374128266671672,
+      0.9575871733328326
+     ],
+     "theory": 0.95,
+     "raw": 0.9474999999999999,
+     "configured": 0.95
+    },
+    "corr_XX@0.95": {
+     "value": 0.944,
+     "ci95": [
+      0.919659110395159,
+      0.9611157050737357
+     ],
+     "theory": 0.9333333333333332
+    },
+    "corr_YY@0.95": {
+     "value": -0.9139999999999999,
+     "ci95": [
+      -0.9358430378233982,
+      -0.8851613915606802
+     ],
+     "theory": -0.9333333333333332
+    },
+    "corr_ZZ@0.95": {
+     "value": 0.9319999999999999,
+     "ci95": [
+      0.905729063079772,
+      0.951137597955196
+     ],
+     "theory": 0.9333333333333332
+    },
+    "fidelity@0.8": {
+     "value": 0.7945,
+     "ci95": [
+      0.7760081168290237,
+      0.8129918831709763
+     ],
+     "theory": 0.8,
+     "raw": 0.7945,
+     "configured": 0.8
+    },
+    "corr_XX@0.8": {
+     "value": 0.724,
+     "ci95": [
+      0.6784671127751372,
+      0.7639915380717693
+     ],
+     "theory": 0.7333333333333334
+    },
+    "corr_YY@0.8": {
+     "value": -0.7,
+     "ci95": [
+      -0.7415805700356786,
+      -0.6530617719433747
+     ],
+     "theory": -0.7333333333333334
+    },
+    "corr_ZZ@0.8": {
+     "value": 0.754,
+     "ci95": [
+      0.7103766796261048,
+      0.7918523573056182
+     ],
+     "theory": 0.7333333333333334
+    },
+    "fidelity@0.6": {
+     "value": 0.613,
+     "ci95": [
+      0.589534485160961,
+      0.636465514839039
+     ],
+     "theory": 0.6,
+     "raw": 0.613,
+     "configured": 0.6
+    },
+    "corr_XX@0.6": {
+     "value": 0.494,
+     "ci95": [
+      0.4382897061950265,
+      0.5459293180016196
+     ],
+     "theory": 0.4666666666666666
+    },
+    "corr_YY@0.6": {
+     "value": -0.47,
+     "ci95": [
+      -0.5228344227706878,
+      -0.413568292558105
+     ],
+     "theory": -0.4666666666666666
+    },
+    "corr_ZZ@0.6": {
+     "value": 0.488,
+     "ci95": [
+      0.4321043946354227,
+      0.5401605523442601
+     ],
+     "theory": 0.4666666666666666
+    },
+    "fidelity_readout_mitigated@0.95": {
+     "value": 0.9499999999999998,
+     "ci95": [
+      0.940128898519296,
+      0.9598711014807036
+     ],
+     "theory": 0.95,
+     "raw": 0.9499999999999998,
+     "configured": 0.95,
+     "label": "analytic channel on mitigated ideal correlators - not a validation of the channel"
+    },
+    "fidelity_readout_mitigated@0.8": {
+     "value": 0.8,
+     "ci95": [
+      0.78170572927676,
+      0.8182942707232401
+     ],
+     "theory": 0.8,
+     "raw": 0.8,
+     "configured": 0.8,
+     "label": "analytic channel on mitigated ideal correlators - not a validation of the channel"
+    },
+    "fidelity_readout_mitigated@0.6": {
+     "value": 0.6,
+     "ci95": [
+      0.5762843433514073,
+      0.6237156566485926
+     ],
+     "theory": 0.6,
+     "raw": 0.6,
+     "configured": 0.6,
+     "label": "analytic channel on mitigated ideal correlators - not a validation of the channel"
+    }
+   },
+   "circuits": [
+    {
+     "id": "noise_ideal_XX",
+     "qubits": 2,
+     "depth": 4,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "noise_ideal_YY",
+     "qubits": 2,
+     "depth": 5,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "noise_ideal_ZZ",
+     "qubits": 2,
+     "depth": 3,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 3
+    }
+   ],
+   "counts": {
+    "noise_ideal_XX": {
+     "00": 480,
+     "11": 520
+    },
+    "noise_ideal_YY": {
+     "01": 509,
+     "10": 491
+    },
+    "noise_ideal_ZZ": {
+     "11": 489,
+     "00": 511
+    }
+   },
+   "viz": {
+    "samples": {
+     "0.95": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "0.8": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "0.6": [
+      1,
+      1,
+      0,
+      0,
+      1,
+      1,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      1,
+      1,
+      0,
+      0
+     ]
+    },
+    "leak": {
+     "by_F": {
+      "0.95": 0.050000000000000044,
+      "0.8": 0.19999999999999996,
+      "0.6": 0.4
+     },
+     "source": "simulated"
+    },
+    "notes": [
+     "noise channel sampled in Python on top of ideal-circuit counts; hardware noise only from the 1-CX Bell circuit",
+     "confidence intervals across F values are correlated (shared ideal counts)",
+     "readout mitigation assumes the identity logical-to-physical qubit mapping; calibration uncertainty is not propagated",
+     "readout-mitigated metric: analytic channel on mitigated ideal correlators - not a validation of the channel",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "links": {
+     "0.95": {
+      "F": 0.9474999999999999,
+      "ci95": [
+       0.9374128266671672,
+       0.9575871733328326
+      ]
+     },
+     "0.8": {
+      "F": 0.7945,
+      "ci95": [
+       0.7760081168290237,
+       0.8129918831709763
+      ]
+     },
+     "0.6": {
+      "F": 0.613,
+      "ci95": [
+       0.589534485160961,
+       0.636465514839039
+      ]
+     }
+    },
+    "bloch": {
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "steps": {
+     "noise_ideal_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "noise_ideal_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "noise_ideal_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "swap": {
+   "ok": true,
+   "level": "swap",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "F1": 0.95,
+    "F2": 0.9,
+    "mode": "precision",
+    "channel": "simulated_pauli"
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=A, 1=C, 2=m_z (B1), 3=m_x (B2)",
+   "metrics": {
+    "corr_XX": {
+     "value": 0.8280000000000001,
+     "ci95": [
+      0.7899991786200582,
+      0.8596634773208791
+     ],
+     "theory": 0.8088888888888888
+    },
+    "corr_YY": {
+     "value": -0.792,
+     "ci95": [
+      -0.8268585308444809,
+      -0.7510796617946767
+     ],
+     "theory": -0.8088888888888888
+    },
+    "corr_ZZ": {
+     "value": 0.8180000000000001,
+     "ci95": [
+      0.7791480583572414,
+      0.8505911355554236
+     ],
+     "theory": 0.8088888888888888
+    },
+    "fidelity": {
+     "value": 0.8595,
+     "ci95": [
+      0.8437766454441291,
+      0.875223354555871
+     ],
+     "theory": 0.8566666666666666,
+     "raw": 0.8595
+    }
+   },
+   "circuits": [
+    {
+     "id": "swap_ideal_XX",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    },
+    {
+     "id": "swap_ideal_YY",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    },
+    {
+     "id": "swap_ideal_ZZ",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    }
+   ],
+   "counts": {
+    "swap_ideal_XX": {
+     "1110": 122,
+     "1000": 138,
+     "0110": 128,
+     "0000": 125,
+     "0101": 114,
+     "1101": 125,
+     "1011": 128,
+     "0011": 120
+    },
+    "swap_ideal_YY": {
+     "0001": 128,
+     "1101": 124,
+     "0100": 118,
+     "0010": 123,
+     "1110": 113,
+     "1011": 136,
+     "0111": 134,
+     "1000": 124
+    },
+    "swap_ideal_ZZ": {
+     "0000": 118,
+     "1101": 139,
+     "1110": 117,
+     "0011": 118,
+     "1010": 129,
+     "1001": 129,
+     "0100": 127,
+     "0111": 123
+    }
+   },
+   "viz": {
+    "samples": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0
+    ],
+    "leak": {
+     "value": 0.14049999999999996,
+     "by_link": {
+      "AB": 0.050000000000000044,
+      "BC": 0.09999999999999998
+     },
+     "source": "simulated"
+    },
+    "links": {
+     "AB": {
+      "F": 0.95
+     },
+     "BC": {
+      "F": 0.9
+     },
+     "AC": {
+      "F": 0.8595,
+      "ci95": [
+       0.8437766454441291,
+       0.875223354555871
+      ]
+     }
+    },
+    "bloch": {
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "notes": [
+     "noise channel sampled in Python on top of ideal-circuit counts; hardware noise only from the 1-CX Bell circuit",
+     "confidence intervals across F values are correlated (shared ideal counts)",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "swap_ideal_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        3
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        3
+       ],
+       "params": []
+      }
+     ],
+     "swap_ideal_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        3
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        3
+       ],
+       "params": []
+      }
+     ],
+     "swap_ideal_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        3
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        3
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        3
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "purify": {
+   "ok": true,
+   "level": "purify",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "noise": {
+     "kind": "damping",
+     "gamma": 0.2
+    },
+    "strategy": "predicted",
+    "mode": "teaching",
+    "channel": "environment_qubits"
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=A1, 1=B1, 2=A2, 3=B2 (postselect A2==B2)",
+   "metrics": {
+    "fidelity_input": {
+     "value": 0.9005,
+     "ci95": [
+      0.8870581873485626,
+      0.9139418126514374
+     ],
+     "theory": 0.8972135954999578,
+     "raw": 0.9005
+    },
+    "fidelity_fixed": {
+     "value": 0.8898652795375357,
+     "ci95": [
+      0.8752498618333069,
+      0.9044806972417645
+     ],
+     "theory": 0.8972135954999577,
+     "raw": 0.8898652795375357,
+     "u": "I"
+    },
+    "p_s_fixed": {
+     "value": 0.903,
+     "ci95": [
+      0.8918881253423234,
+      0.9130810847518442
+     ],
+     "theory": 0.8999999999999996,
+     "u": "I"
+    },
+    "raw_pairs_fixed": {
+     "value": 2.2148394241417497,
+     "ci95": [
+      2.1903859727239414,
+      2.242433712448366
+     ],
+     "theory": 2.222222222222223,
+     "u": "I"
+    },
+    "fidelity_adaptive": {
+     "value": 0.9798300561743418,
+     "ci95": [
+      0.9724462257925087,
+      0.9872138865561749
+     ],
+     "theory": 0.9817073170731706,
+     "raw": 0.9798300561743418,
+     "u": "SH"
+    },
+    "p_s_adaptive": {
+     "value": 0.8183333333333334,
+     "ci95": [
+      0.8041316052889746,
+      0.8317208311377664
+     ],
+     "theory": 0.8199999999999992,
+     "u": "SH"
+    },
+    "raw_pairs_adaptive": {
+     "value": 2.4439918533604885,
+     "ci95": [
+      2.404653009909667,
+      2.4871550711917054
+     ],
+     "theory": 2.439024390243905,
+     "u": "SH"
+    }
+   },
+   "circuits": [
+    {
+     "id": "pur_tomo_g0p2_XX",
+     "qubits": 3,
+     "depth": 6,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 6
+    },
+    {
+     "id": "pur_tomo_g0p2_YY",
+     "qubits": 3,
+     "depth": 7,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 6
+    },
+    {
+     "id": "pur_tomo_g0p2_ZZ",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    },
+    {
+     "id": "pur_g0p2_I_XX",
+     "qubits": 6,
+     "depth": 8,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 8
+    },
+    {
+     "id": "pur_g0p2_I_YY",
+     "qubits": 6,
+     "depth": 9,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 8
+    },
+    {
+     "id": "pur_g0p2_I_ZZ",
+     "qubits": 6,
+     "depth": 7,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 7
+    },
+    {
+     "id": "pur_g0p2_SH_XX",
+     "qubits": 6,
+     "depth": 10,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 8
+    },
+    {
+     "id": "pur_g0p2_SH_YY",
+     "qubits": 6,
+     "depth": 11,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 8
+    },
+    {
+     "id": "pur_g0p2_SH_ZZ",
+     "qubits": 6,
+     "depth": 9,
+     "two_qubit_gates": 8,
+     "compiled_two_qubit_gates": 8,
+     "compiled_depth": 7
+    }
+   ],
+   "counts": {
+    "pur_tomo_g0p2_XX": {
+     "00": 475,
+     "11": 475,
+     "10": 24,
+     "01": 26
+    },
+    "pur_tomo_g0p2_YY": {
+     "10": 467,
+     "01": 481,
+     "11": 27,
+     "00": 25
+    },
+    "pur_tomo_g0p2_ZZ": {
+     "00": 494,
+     "11": 409,
+     "01": 97
+    },
+    "pur_g0p2_I_XX": {
+     "0011": 188,
+     "1100": 201,
+     "1011": 16,
+     "1110": 30,
+     "0000": 188,
+     "0001": 21,
+     "1111": 229,
+     "0111": 27,
+     "1101": 23,
+     "1000": 28,
+     "0100": 19,
+     "1001": 4,
+     "0010": 22,
+     "0110": 4
+    },
+    "pur_g0p2_I_YY": {
+     "1001": 19,
+     "0010": 197,
+     "0001": 195,
+     "1101": 190,
+     "1110": 212,
+     "0111": 10,
+     "1100": 21,
+     "1010": 12,
+     "1111": 24,
+     "0000": 29,
+     "0011": 28,
+     "0110": 11,
+     "1000": 15,
+     "0101": 15,
+     "0100": 12,
+     "1011": 10
+    },
+    "pur_g0p2_I_ZZ": {
+     "0101": 11,
+     "1100": 233,
+     "1111": 239,
+     "0011": 212,
+     "0000": 227,
+     "1010": 11,
+     "0100": 18,
+     "1011": 8,
+     "0110": 12,
+     "0111": 12,
+     "1001": 8,
+     "1000": 9
+    },
+    "pur_g0p2_SH_XX": {
+     "0000": 187,
+     "1100": 198,
+     "1001": 25,
+     "0011": 205,
+     "1111": 223,
+     "0110": 30,
+     "1011": 22,
+     "1000": 15,
+     "1010": 18,
+     "0111": 20,
+     "0100": 25,
+     "0101": 24,
+     "0001": 3,
+     "0010": 5
+    },
+    "pur_g0p2_SH_YY": {
+     "0010": 210,
+     "1110": 210,
+     "0111": 26,
+     "0101": 27,
+     "1010": 20,
+     "1101": 179,
+     "1000": 15,
+     "0110": 30,
+     "0001": 208,
+     "0011": 8,
+     "1011": 16,
+     "1001": 23,
+     "0000": 5,
+     "0100": 23
+    },
+    "pur_g0p2_SH_ZZ": {
+     "1100": 192,
+     "0100": 45,
+     "0000": 267,
+     "1111": 195,
+     "1001": 40,
+     "1011": 42,
+     "0101": 59,
+     "0011": 148,
+     "0001": 12
+    }
+   },
+   "viz": {
+    "choice": {
+     "chosen": "SH",
+     "global_best": "SH",
+     "limited": false,
+     "predicted_F_out": {
+      "I": 0.9020959432354716,
+      "SH": 0.983133854983766
+     },
+     "measured_F_out": {
+      "I": 0.8898652795375357,
+      "SH": 0.9798300561743418
+     },
+     "p_hat": [
+      0.9005,
+      0.04949999999999999,
+      0.04749999999999996,
+      0.00250000000000003
+     ]
+    },
+    "samples": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "leak": {
+     "value": 0.09950000000000003,
+     "source": "circuit"
+    },
+    "links": {
+     "input": {
+      "F": 0.9005,
+      "ci95": [
+       0.8870581873485626,
+       0.9139418126514374
+      ]
+     },
+     "fixed": {
+      "F": 0.8898652795375357
+     },
+     "adaptive": {
+      "F": 0.9798300561743418,
+      "u": "SH",
+      "p_s": 0.8183333333333334
+     }
+    },
+    "bloch": {
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "notes": [
+     "noise realized by environment qubits (Stinespring dilation) inside the circuit",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "pur_tomo_g0p2_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.9272952180016122
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "pur_tomo_g0p2_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.9272952180016122
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "pur_tomo_g0p2_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.9272952180016122
+       ]
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        2,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "qkd": {
+   "ok": true,
+   "level": "qkd",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "theta": 2.0943951023931953,
+    "smart_direct": false,
+    "beta_source": "split"
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=A, 1=B, 2=E (Helstrom, only with Eve)",
+   "metrics": {
+    "qber_Z": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0038268985863905147
+     ],
+     "theory": 0.0
+    },
+    "qber_X": {
+     "value": 0.264,
+     "ci95": [
+      0.2376195013277309,
+      0.2921867948050455
+     ],
+     "theory": 0.24999999999999994
+    },
+    "chsh_standard": {
+     "value": 2.2039999999999997,
+     "ci95": [
+      2.1024832139814356,
+      2.305516786018564
+     ],
+     "theory": 2.121320343559643,
+     "sigma": 0.05179427858090008,
+     "significance_sigma": 3.938658971402834,
+     "classical_bound": 2.0,
+     "method": "direct_circuits"
+    },
+    "chsh_smart": {
+     "value": 2.239382101280129,
+     "ci95": [
+      2.1758355601060266,
+      2.3029286424542317
+     ],
+     "theory": 2.2329874704943458,
+     "sigma": 0.03242170468066461,
+     "significance_sigma": 7.38339034415084,
+     "classical_bound": 2.0,
+     "method": "linear_from_ZZ_XX",
+     "beta": 0.4111507319970802,
+     "beta_source": "split",
+     "label": "device-informed (\u03b2 estimated on a held-out half)",
+     "S_max_theory": 2.23606797749979,
+     "note": "device-informed (\u03b2 estimated from data), computed from ZZ/XX correlators via an exact identity; not an independent Bell test, not device-independent"
+    },
+    "eve_guess": {
+     "value": 0.929,
+     "ci95": [
+      0.9113859810064907,
+      0.9433305400063863
+     ],
+     "theory": 0.9330127018922193
+    },
+    "key_rate_shor_preskill": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": 0.0
+    },
+    "key_rate_lca_biased": {
+     "value": 0.16727736250650604,
+     "ci95": [
+      0.09223168714669705,
+      0.20894086831585246
+     ],
+     "theory": 0.18872187554086717
+    }
+   },
+   "circuits": [
+    {
+     "id": "qkd_th120_ZZ",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    },
+    {
+     "id": "qkd_th120_XX",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    },
+    {
+     "id": "qkd_th120_chsh_a0_b0",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    },
+    {
+     "id": "qkd_th120_chsh_a0_b1",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    },
+    {
+     "id": "qkd_th120_chsh_a1_b0",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    },
+    {
+     "id": "qkd_th120_chsh_a1_b1",
+     "qubits": 3,
+     "depth": 5,
+     "two_qubit_gates": 2,
+     "compiled_two_qubit_gates": 2,
+     "compiled_depth": 5
+    }
+   ],
+   "counts": {
+    "qkd_th120_ZZ": {
+     "111": 465,
+     "000": 464,
+     "011": 42,
+     "100": 29
+    },
+    "qkd_th120_XX": {
+     "010": 57,
+     "111": 172,
+     "110": 63,
+     "001": 75,
+     "100": 213,
+     "101": 69,
+     "011": 186,
+     "000": 165
+    },
+    "qkd_th120_chsh_a0_b0": {
+     "000": 429,
+     "101": 79,
+     "111": 363,
+     "100": 35,
+     "001": 10,
+     "010": 55,
+     "110": 6,
+     "011": 23
+    },
+    "qkd_th120_chsh_a0_b1": {
+     "111": 416,
+     "000": 388,
+     "101": 71,
+     "011": 22,
+     "001": 4,
+     "010": 60,
+     "100": 35,
+     "110": 4
+    },
+    "qkd_th120_chsh_a1_b0": {
+     "000": 246,
+     "001": 134,
+     "011": 99,
+     "110": 158,
+     "100": 81,
+     "111": 272,
+     "010": 3,
+     "101": 7
+    },
+    "qkd_th120_chsh_a1_b1": {
+     "010": 100,
+     "110": 248,
+     "001": 248,
+     "100": 4,
+     "000": 144,
+     "101": 97,
+     "111": 155,
+     "011": 4
+    }
+   },
+   "viz": {
+    "samples": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "leak": {
+     "value": 0.8580000000000001,
+     "source": "circuit",
+     "kind": "eve_advantage"
+    },
+    "finite_size": {
+     "n_min_pairs_lca_biased": 2511.886431509582,
+     "n_min_pairs_symmetric": 2511.886431509582,
+     "rate_lca_biased": {
+      "10000": 0.05600053334233392,
+      "100000": 0.10936616186164079,
+      "1e+06": 0.13857667648114685
+     },
+     "rate_symmetric": {
+      "10000": 0.04563023226209286,
+      "100000": 0.07217398627793851,
+      "1e+06": 0.08006590719259454
+     },
+     "shots_3sigma_standard": 3742.5734117328734,
+     "shots_3sigma_smart": 456.1972466451199,
+     "shots_note": "shots per CHSH configuration given known \u03b2",
+     "warning": "Asymptotic rates are projections: with ~1000 shots no key is secure. The finite-key numbers are optimistic and simplified (point estimates, no error-correction leakage, toy security terms), not a security proof."
+    },
+    "bloch": {
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "notes": [
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "qkd_th120_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        2.0943951023931953
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982989
+       ]
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ],
+     "qkd_th120_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        2.0943951023931953
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": [
+        -1.5707963267948966
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": [
+        -1.5707963267948966
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982989
+       ]
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ],
+     "qkd_th120_chsh_a0_b0": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cry",
+       "qubits": [
+        1,
+        2
+       ],
+       "clbits": [],
+       "params": [
+        2.0943951023931953
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": [
+        -0.7853981633974483
+       ]
+      },
+      {
+       "name": "ry",
+       "qubits": [
+        2
+       ],
+       "clbits": [],
+       "params": [
+        0.5235987755982989
+       ]
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        2
+       ],
+       "clbits": [
+        2
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  },
+  "rescue": {
+   "ok": true,
+   "level": "rescue",
+   "mode": "batch",
+   "backend": "basic_simulator",
+   "timestamp": "2026-10-10T01:42:39+00:00",
+   "shots": 1000,
+   "params": {
+    "broken": "BOG-CAL",
+    "damage": {
+     "kind": "werner",
+     "F": 0.7
+    },
+    "healthy_F": 0.95,
+    "target_F": 0.85,
+    "mode": "precision"
+   },
+   "bit_order": "Qiskit little-endian; clbits: 0=A1, 1=B1, 2=A2, 3=B2 (postselect A2==B2) | swap: Qiskit little-endian; clbits: 0=A, 1=C, 2=m_z (B1), 3=m_x (B2)",
+   "metrics": {
+    "fidelity_direct": {
+     "value": 0.7005,
+     "ci95": [
+      0.6790443984095883,
+      0.7219556015904117
+     ],
+     "theory": 0.7,
+     "raw": 0.7005
+    },
+    "raw_pairs_direct": {
+     "value": 1.0,
+     "ci95": [
+      1.0,
+      1.0
+     ],
+     "theory": 1.0
+    },
+    "key_rate_shor_preskill_direct": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": 0.0
+    },
+    "key_rate_lca_biased_direct": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": 0.0
+    },
+    "key_per_raw_pair_lca_biased_direct": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": null
+    },
+    "fidelity_reroute": {
+     "value": 0.9145,
+     "ci95": [
+      0.901901458977499,
+      0.927098541022501
+     ],
+     "theory": 0.9033333333333334,
+     "raw": 0.9145
+    },
+    "raw_pairs_reroute": {
+     "value": 2.0,
+     "ci95": [
+      2.0,
+      2.0
+     ],
+     "theory": 2.0
+    },
+    "key_rate_shor_preskill_reroute": {
+     "value": 0.18256014495426964,
+     "ci95": [
+      0.1204455079995907,
+      0.23658369655662648
+     ],
+     "theory": 0.15515930427107938
+    },
+    "key_rate_lca_biased_reroute": {
+     "value": 0.36518019369853166,
+     "ci95": [
+      0.24094987718414673,
+      0.47322625254216677
+     ],
+     "theory": 0.31031860854215876
+    },
+    "key_per_raw_pair_lca_biased_reroute": {
+     "value": 0.18259009684926583,
+     "ci95": [
+      0.12047493859207337,
+      0.23661312627108338
+     ],
+     "theory": null
+    },
+    "fidelity_purify_fixed": {
+     "value": 0.7124863267350904,
+     "ci95": [
+      0.6875454734067363,
+      0.7374271800634444
+     ],
+     "theory": 0.7352941176470588,
+     "raw": 0.7124863267350904,
+     "u": "I"
+    },
+    "raw_pairs_purify_fixed": {
+     "value": 2.944062806673209,
+     "ci95": [
+      2.874402834711811,
+      3.019272293687657
+     ],
+     "theory": 2.9411764705882355
+    },
+    "key_rate_shor_preskill_purify_fixed": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": 0.0
+    },
+    "key_rate_lca_biased_purify_fixed": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": 0.0
+    },
+    "key_per_raw_pair_lca_biased_purify_fixed": {
+     "value": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "theory": null
+    }
+   },
+   "circuits": [
+    {
+     "id": "pur_tomo_ideal_XX",
+     "qubits": 2,
+     "depth": 4,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "pur_tomo_ideal_YY",
+     "qubits": 2,
+     "depth": 5,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "pur_tomo_ideal_ZZ",
+     "qubits": 2,
+     "depth": 3,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 3
+    },
+    {
+     "id": "pur_ideal_I_XX",
+     "qubits": 4,
+     "depth": 6,
+     "two_qubit_gates": 4,
+     "compiled_two_qubit_gates": 4,
+     "compiled_depth": 6
+    },
+    {
+     "id": "pur_ideal_I_YY",
+     "qubits": 4,
+     "depth": 7,
+     "two_qubit_gates": 4,
+     "compiled_two_qubit_gates": 4,
+     "compiled_depth": 6
+    },
+    {
+     "id": "pur_ideal_I_ZZ",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 4,
+     "compiled_two_qubit_gates": 4,
+     "compiled_depth": 5
+    },
+    {
+     "id": "swap_ideal_XX",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    },
+    {
+     "id": "swap_ideal_YY",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    },
+    {
+     "id": "swap_ideal_ZZ",
+     "qubits": 4,
+     "depth": 5,
+     "two_qubit_gates": 3,
+     "compiled_two_qubit_gates": 3,
+     "compiled_depth": 5
+    }
+   ],
+   "counts": {
+    "pur_tomo_ideal_XX": {
+     "00": 480,
+     "11": 520
+    },
+    "pur_tomo_ideal_YY": {
+     "01": 509,
+     "10": 491
+    },
+    "pur_tomo_ideal_ZZ": {
+     "11": 489,
+     "00": 511
+    },
+    "pur_ideal_I_XX": {
+     "0011": 243,
+     "0000": 243,
+     "1111": 248,
+     "1100": 266
+    },
+    "pur_ideal_I_YY": {
+     "0001": 242,
+     "1101": 232,
+     "1110": 271,
+     "0010": 255
+    },
+    "pur_ideal_I_ZZ": {
+     "1100": 256,
+     "0011": 237,
+     "1111": 271,
+     "0000": 236
+    },
+    "swap_ideal_XX": {
+     "1110": 122,
+     "1000": 138,
+     "0110": 128,
+     "0000": 125,
+     "0101": 114,
+     "1101": 125,
+     "1011": 128,
+     "0011": 120
+    },
+    "swap_ideal_YY": {
+     "0001": 128,
+     "1101": 124,
+     "0100": 118,
+     "0010": 123,
+     "1110": 113,
+     "1011": 136,
+     "0111": 134,
+     "1000": 124
+    },
+    "swap_ideal_ZZ": {
+     "0000": 118,
+     "1101": 139,
+     "1110": 117,
+     "0011": 118,
+     "1010": 129,
+     "1001": 129,
+     "0100": 127,
+     "0111": 123
+    }
+   },
+   "viz": {
+    "links": {
+     "BOG-MED": {
+      "F": 0.95,
+      "ci95": null,
+      "status": "healthy",
+      "source": "configured"
+     },
+     "MED-CAL": {
+      "F": 0.95,
+      "ci95": null,
+      "status": "healthy",
+      "source": "configured"
+     },
+     "BOG-CAL": {
+      "F": 0.9145,
+      "ci95": [
+       0.901901458977499,
+       0.927098541022501
+      ],
+      "status": "rescued",
+      "source": "simulated",
+      "direct_F": 0.7005,
+      "via": "reroute"
+     }
+    },
+    "strategies": [
+     {
+      "key": "direct",
+      "title": "Use the damaged link",
+      "status": "ok",
+      "fidelity": {
+       "value": 0.7005,
+       "ci95": [
+        0.6790443984095883,
+        0.7219556015904117
+       ],
+       "theory": 0.7,
+       "raw": 0.7005
+      },
+      "raw_pairs": {
+       "value": 1.0,
+       "ci95": [
+        1.0,
+        1.0
+       ],
+       "theory": 1.0
+      },
+      "eta_effective": 1.0637451880794294e-08,
+      "loss_db": 79.73162391462259,
+      "raw_pairs_per_delivered": 94007475.77579927,
+      "qber_Z": {
+       "value": 0.191,
+       "ci95": [
+        0.16783652890414247,
+        0.21652849442224692
+       ],
+       "theory": 0.2
+      },
+      "qber_X": {
+       "value": 0.194,
+       "ci95": [
+        0.17068102312568378,
+        0.21966103880918725
+       ],
+       "theory": 0.2
+      },
+      "key_rate_shor_preskill": {
+       "value": 0.0,
+       "ci95": [
+        0.0,
+        0.0
+       ],
+       "theory": 0.0
+      },
+      "key_rate_lca_biased": {
+       "value": 0.0,
+       "ci95": [
+        0.0,
+        0.0
+       ],
+       "theory": 0.0
+      },
+      "key_per_raw_pair": {
+       "shor_preskill": 0.0,
+       "lca_biased": 0.0
+      },
+      "meets_target": false,
+      "u": null,
+      "p_s": null,
+      "explanation": "Direct link: F = 0.701, 1 raw pair per delivered pair. Fidelity lower CI bound 0.679 vs target 0.85."
+     },
+     {
+      "key": "reroute",
+      "title": "Reroute via Medell\u00edn",
+      "status": "ok",
+      "fidelity": {
+       "value": 0.9145,
+       "ci95": [
+        0.901901458977499,
+        0.927098541022501
+       ],
+       "theory": 0.9033333333333334,
+       "raw": 0.9145
+      },
+      "raw_pairs": {
+       "value": 2.0,
+       "ci95": [
+        2.0,
+        2.0
+       ],
+       "theory": 2.0
+      },
+      "eta_effective": 2.9921412566496495e-09,
+      "loss_db": 85.24017907620618,
+      "raw_pairs_per_delivered": 668417640.8968852,
+      "qber_Z": {
+       "value": 0.055999999999999994,
+       "ci95": [
+        0.04337460969160234,
+        0.07202367625311246
+       ],
+       "theory": 0.06444444444444442
+      },
+      "qber_X": {
+       "value": 0.059,
+       "ci95": [
+        0.04601408784574912,
+        0.07536123670744732
+       ],
+       "theory": 0.06444444444444442
+      },
+      "key_rate_shor_preskill": {
+       "value": 0.18256014495426964,
+       "ci95": [
+        0.1204455079995907,
+        0.23658369655662648
+       ],
+       "theory": 0.15515930427107938
+      },
+      "key_rate_lca_biased": {
+       "value": 0.36518019369853166,
+       "ci95": [
+        0.24094987718414673,
+        0.47322625254216677
+       ],
+       "theory": 0.31031860854215876
+      },
+      "key_per_raw_pair": {
+       "shor_preskill": 0.09128007247713482,
+       "lca_biased": 0.18259009684926583
+      },
+      "meets_target": true,
+      "u": null,
+      "p_s": null,
+      "explanation": "Swap over healthy links BOG-MED and MED-CAL: F = 0.914 (theory 0.903), 2 raw pairs (ideal Bell measurement). Fidelity lower CI bound 0.902 vs target 0.85."
+     },
+     {
+      "key": "purify_fixed",
+      "title": "Purify once (fixed DEJMPS)",
+      "status": "ok",
+      "fidelity": {
+       "value": 0.7124863267350904,
+       "ci95": [
+        0.6875454734067363,
+        0.7374271800634444
+       ],
+       "theory": 0.7352941176470588,
+       "raw": 0.7124863267350904,
+       "u": "I"
+      },
+      "raw_pairs": {
+       "value": 2.944062806673209,
+       "ci95": [
+        2.874402834711811,
+        3.019272293687657
+       ],
+       "theory": 2.9411764705882355
+      },
+      "eta_effective": 1.0637451880794294e-08,
+      "loss_db": 79.73162391462259,
+      "raw_pairs_per_delivered": 276763912.9807633,
+      "qber_Z": {
+       "value": 0.06948640483383683,
+       "ci95": [
+        0.052496781086174726,
+        0.09144375972713581
+       ],
+       "theory": 0.05882352941176472
+      },
+      "qber_X": {
+       "value": 0.26618705035971224,
+       "ci95": [
+        0.23467892597957912,
+        0.30026575962585705
+       ],
+       "theory": 0.23529411764705888
+      },
+      "key_rate_shor_preskill": {
+       "value": 0.0,
+       "ci95": [
+        0.0,
+        0.0
+       ],
+       "theory": 0.0
+      },
+      "key_rate_lca_biased": {
+       "value": 0.0,
+       "ci95": [
+        0.0,
+        0.0
+       ],
+       "theory": 0.0
+      },
+      "key_per_raw_pair": {
+       "shor_preskill": 0.0,
+       "lca_biased": 0.0
+      },
+      "meets_target": false,
+      "u": "I",
+      "p_s": 0.6793333333333333,
+      "explanation": "One DEJMPS round (U = I): F = 0.712 (input 0.701), success 0.68, 2.94 raw pairs per output pair. Fidelity lower CI bound 0.688 vs target 0.85."
+     }
+    ],
+    "samples": {
+     "direct": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+     ],
+     "reroute": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "purify_fixed": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "leak": {
+     "value": 0.2995,
+     "source": "simulated"
+    },
+    "recommendation": {
+     "strategy": "reroute",
+     "meets_target": true,
+     "criterion": "lower CI bound of F meets the target; then fewest raw pairs per delivered pair including fiber loss",
+     "fewest_raw_pairs_ignoring_loss": "reroute",
+     "message": "Recommended: Reroute via Medell\u00edn (F = 0.914, 2.00 raw pairs). Criterion: lower CI bound of F meets the target; then fewest raw pairs per delivered pair including fiber loss."
+    },
+    "projections": {
+     "recursive_fixed_single_link": {
+      "strategy": "fixed",
+      "reachable": true,
+      "rounds": 3,
+      "raw_pairs": 23.98474737845568,
+      "F": 0.9343946615824594,
+      "trajectory": [
+       0.7000000000000001,
+       0.7352941176470588,
+       0.8459459459459456,
+       0.9343946615824594
+      ],
+      "cost_trajectory": [
+       1.0,
+       2.9411764705882346,
+       9.189189189189186,
+       23.98474737845568
+      ]
+     },
+     "adaptive": {
+      "strategy": "adaptive",
+      "reachable": true,
+      "rounds": 3,
+      "raw_pairs": 23.98474737845568,
+      "F": 0.9343946615824594,
+      "trajectory": [
+       0.7000000000000001,
+       0.7352941176470588,
+       0.8459459459459456,
+       0.9343946615824594
+      ],
+      "cost_trajectory": [
+       1.0,
+       2.9411764705882346,
+       9.189189189189186,
+       23.98474737845568
+      ]
+     },
+     "pumping": {
+      "strategy": "pumping",
+      "reachable": false,
+      "rounds": 12,
+      "raw_pairs": null,
+      "F": 0.8149915131127805,
+      "trajectory": [
+       0.7000000000000001,
+       0.7352941176470588,
+       0.7857142857142857,
+       0.7989690721649485,
+       0.8086053412462909,
+       0.8118644067796609,
+       0.8136781053649106,
+       0.8143840330350998,
+       0.8147335423197491,
+       0.8148796645328219,
+       0.8149482343830339,
+       0.8149779258220914,
+       0.8149915131127805
+      ],
+      "cost_trajectory": [
+       1.0,
+       2.9411764705882346,
+       5.982142857142855,
+       10.077319587628864,
+       15.942136498516316,
+       24.192796610169477,
+       35.92013049782502,
+       52.57243633860974,
+       76.2546532131661,
+       109.93792240090995,
+       157.85751521864688,
+       226.03394920952016,
+       323.0344448234097
+      ]
+     },
+     "auto": {
+      "strategy": "adaptive",
+      "reachable": true,
+      "rounds": 3,
+      "raw_pairs": 23.98474737845568,
+      "F": 0.9343946615824594,
+      "trajectory": [
+       0.7000000000000001,
+       0.7352941176470588,
+       0.8459459459459456,
+       0.9343946615824594
+      ],
+      "cost_trajectory": [
+       1.0,
+       2.9411764705882346,
+       9.189189189189186,
+       23.98474737845568
+      ]
+     }
+    },
+    "projection_note": "Bell-diagonal projection with ideal local gates, single damaged link; 'recursive_fixed_single_link' repeats the fixed circuit k times. Not measured.",
+    "geo": {
+     "direct": {
+      "eta": 1.0637451880794294e-08,
+      "loss_db": 79.73162391462259
+     },
+     "reroute": {
+      "eta_ideal_memory": 2.9921412566496495e-09,
+      "eta_no_memory": 1.8667680147661703e-15,
+      "loss_db_ideal_memory": 85.24017907620618,
+      "loss_db_no_memory": 147.2890964893192,
+      "hops": {
+       "BOG-MED": 6.238903362658825e-07,
+       "MED-CAL": 2.9921412566496495e-09
+      }
+     },
+     "note": "eta is one photon over the fiber (source at one end); loss lowers the pair rate, not the fidelity. Reroute with ideal memories is limited by the worse hop (min); without memories it is the product. Assumes an ideal Bell measurement."
+    },
+    "criteria_note": "Fidelity test uses the lower CI bound; purify costs use the point estimate of p_s.",
+    "predicted_u": "I",
+    "choice": {
+     "chosen": "I",
+     "global_best": "I",
+     "limited": false,
+     "predicted_F_out": {
+      "I": 0.7504769496919795
+     },
+     "measured_F_out": {
+      "I": 0.7124863267350904
+     },
+     "p_hat": [
+      0.7005,
+      0.10550000000000001,
+      0.08550000000000002,
+      0.10849999999999999
+     ]
+    },
+    "notes": [
+     "noise channel sampled in Python on top of ideal-circuit counts; hardware noise only from the 1-CX Bell circuit",
+     "confidence intervals across F values are correlated (shared ideal counts)",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "pur_tomo_ideal_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "pur_tomo_ideal_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "pur_tomo_ideal_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ "circuits_total": 29,
+ "per_level": {
+  "link": {
+   "circuits": 3,
+   "new": 3,
+   "shares_shots_with": [
+    "noise",
+    "rescue"
+   ]
+  },
+  "teleport": {
+   "circuits": 3,
+   "new": 3,
+   "shares_shots_with": []
+  },
+  "noise": {
+   "circuits": 3,
+   "new": 0,
+   "shares_shots_with": [
+    "link",
+    "rescue"
+   ]
+  },
+  "swap": {
+   "circuits": 3,
+   "new": 3,
+   "shares_shots_with": [
+    "rescue"
+   ]
+  },
+  "purify": {
+   "circuits": 9,
+   "new": 9,
+   "shares_shots_with": []
+  },
+  "qkd": {
+   "circuits": 6,
+   "new": 6,
+   "shares_shots_with": []
+  },
+  "rescue": {
+   "circuits": 9,
+   "new": 3,
+   "shares_shots_with": [
+    "link",
+    "noise",
+    "swap"
+   ]
+  },
+  "readout": {
+   "circuits": 2,
+   "new": 2,
+   "shares_shots_with": []
+  }
+ },
+ "summary": "29 unique circuits (link: 3 (3 new), teleport: 3 (3 new), noise: 3 (0 new), swap: 3 (3 new), purify: 9 (9 new), qkd: 6 (6 new), rescue: 9 (3 new), readout: 2 (2 new))",
+ "params": {
+  "link": {},
+  "teleport": {
+   "theta_deg": 60.0,
+   "phi_deg": 30.0,
+   "F": 0.8
+  },
+  "noise": {
+   "Fs": [
+    0.95,
+    0.8,
+    0.6
+   ],
+   "mode": "precision"
+  },
+  "swap": {
+   "F1": 0.95,
+   "F2": 0.9,
+   "mode": "precision"
+  },
+  "purify": {
+   "F": null,
+   "gamma": 0.2,
+   "p": null,
+   "strategy": "predicted",
+   "mode": "teaching"
+  },
+  "qkd": {
+   "theta_deg": 120.0,
+   "smart_direct": false,
+   "beta_source": "split"
+  },
+  "rescue": {
+   "broken": "BOG-CAL",
+   "damage": {
+    "kind": "werner",
+    "F": 0.7
+   },
+   "healthy_F": 0.95,
+   "target_F": 0.85,
+   "mode": "precision"
+  }
+ },
+ "notes": [
+  "Levels that share circuits share their shots: their metrics are correlated, not independent."
+ ],
+ "counts": {
+  "link_XX": {
+   "00": 480,
+   "11": 520
+  },
+  "link_YY": {
+   "01": 509,
+   "10": 491
+  },
+  "link_ZZ": {
+   "11": 489,
+   "00": 511
+  },
+  "tele_psi_F0p8_X": {
+   "010": 206,
+   "111": 189,
+   "101": 195,
+   "100": 48,
+   "000": 185,
+   "011": 54,
+   "110": 51,
+   "001": 72
+  },
+  "tele_psi_F0p8_Y": {
+   "110": 155,
+   "011": 175,
+   "111": 82,
+   "100": 82,
+   "010": 82,
+   "001": 80,
+   "000": 174,
+   "101": 170
+  },
+  "tele_psi_F0p8_Z": {
+   "010": 92,
+   "111": 168,
+   "011": 171,
+   "110": 78,
+   "000": 164,
+   "001": 88,
+   "100": 183,
+   "101": 56
+  },
+  "swap_ideal_XX": {
+   "1110": 122,
+   "1000": 138,
+   "0110": 128,
+   "0000": 125,
+   "0101": 114,
+   "1101": 125,
+   "1011": 128,
+   "0011": 120
+  },
+  "swap_ideal_YY": {
+   "0001": 128,
+   "1101": 124,
+   "0100": 118,
+   "0010": 123,
+   "1110": 113,
+   "1011": 136,
+   "0111": 134,
+   "1000": 124
+  },
+  "swap_ideal_ZZ": {
+   "0000": 118,
+   "1101": 139,
+   "1110": 117,
+   "0011": 118,
+   "1010": 129,
+   "1001": 129,
+   "0100": 127,
+   "0111": 123
+  },
+  "pur_tomo_g0p2_XX": {
+   "00": 475,
+   "11": 475,
+   "10": 24,
+   "01": 26
+  },
+  "pur_tomo_g0p2_YY": {
+   "10": 467,
+   "01": 481,
+   "11": 27,
+   "00": 25
+  },
+  "pur_tomo_g0p2_ZZ": {
+   "00": 494,
+   "11": 409,
+   "01": 97
+  },
+  "pur_g0p2_I_XX": {
+   "0011": 188,
+   "1100": 201,
+   "1011": 16,
+   "1110": 30,
+   "0000": 188,
+   "0001": 21,
+   "1111": 229,
+   "0111": 27,
+   "1101": 23,
+   "1000": 28,
+   "0100": 19,
+   "1001": 4,
+   "0010": 22,
+   "0110": 4
+  },
+  "pur_g0p2_I_YY": {
+   "1001": 19,
+   "0010": 197,
+   "0001": 195,
+   "1101": 190,
+   "1110": 212,
+   "0111": 10,
+   "1100": 21,
+   "1010": 12,
+   "1111": 24,
+   "0000": 29,
+   "0011": 28,
+   "0110": 11,
+   "1000": 15,
+   "0101": 15,
+   "0100": 12,
+   "1011": 10
+  },
+  "pur_g0p2_I_ZZ": {
+   "0101": 11,
+   "1100": 233,
+   "1111": 239,
+   "0011": 212,
+   "0000": 227,
+   "1010": 11,
+   "0100": 18,
+   "1011": 8,
+   "0110": 12,
+   "0111": 12,
+   "1001": 8,
+   "1000": 9
+  },
+  "pur_g0p2_SH_XX": {
+   "0000": 187,
+   "1100": 198,
+   "1001": 25,
+   "0011": 205,
+   "1111": 223,
+   "0110": 30,
+   "1011": 22,
+   "1000": 15,
+   "1010": 18,
+   "0111": 20,
+   "0100": 25,
+   "0101": 24,
+   "0001": 3,
+   "0010": 5
+  },
+  "pur_g0p2_SH_YY": {
+   "0010": 210,
+   "1110": 210,
+   "0111": 26,
+   "0101": 27,
+   "1010": 20,
+   "1101": 179,
+   "1000": 15,
+   "0110": 30,
+   "0001": 208,
+   "0011": 8,
+   "1011": 16,
+   "1001": 23,
+   "0000": 5,
+   "0100": 23
+  },
+  "pur_g0p2_SH_ZZ": {
+   "1100": 192,
+   "0100": 45,
+   "0000": 267,
+   "1111": 195,
+   "1001": 40,
+   "1011": 42,
+   "0101": 59,
+   "0011": 148,
+   "0001": 12
+  },
+  "qkd_th120_ZZ": {
+   "111": 465,
+   "000": 464,
+   "011": 42,
+   "100": 29
+  },
+  "qkd_th120_XX": {
+   "010": 57,
+   "111": 172,
+   "110": 63,
+   "001": 75,
+   "100": 213,
+   "101": 69,
+   "011": 186,
+   "000": 165
+  },
+  "qkd_th120_chsh_a0_b0": {
+   "000": 429,
+   "101": 79,
+   "111": 363,
+   "100": 35,
+   "001": 10,
+   "010": 55,
+   "110": 6,
+   "011": 23
+  },
+  "qkd_th120_chsh_a0_b1": {
+   "111": 416,
+   "000": 388,
+   "101": 71,
+   "011": 22,
+   "001": 4,
+   "010": 60,
+   "100": 35,
+   "110": 4
+  },
+  "qkd_th120_chsh_a1_b0": {
+   "000": 246,
+   "001": 134,
+   "011": 99,
+   "110": 158,
+   "100": 81,
+   "111": 272,
+   "010": 3,
+   "101": 7
+  },
+  "qkd_th120_chsh_a1_b1": {
+   "010": 100,
+   "110": 248,
+   "001": 248,
+   "100": 4,
+   "000": 144,
+   "101": 97,
+   "111": 155,
+   "011": 4
+  },
+  "pur_ideal_I_XX": {
+   "0011": 243,
+   "0000": 243,
+   "1111": 248,
+   "1100": 266
+  },
+  "pur_ideal_I_YY": {
+   "0001": 242,
+   "1101": 232,
+   "1110": 271,
+   "0010": 255
+  },
+  "pur_ideal_I_ZZ": {
+   "1100": 256,
+   "0011": 237,
+   "1111": 271,
+   "0000": 236
+  },
+  "readout_0000": {
+   "0000": 1000
+  },
+  "readout_1111": {
+   "1111": 1000
+  }
+ },
+ "alias": {
+  "link": {
+   "link_XX": "link_XX",
+   "link_YY": "link_YY",
+   "link_ZZ": "link_ZZ"
+  },
+  "teleport": {
+   "tele_psi_F0p8_X": "tele_psi_F0p8_X",
+   "tele_psi_F0p8_Y": "tele_psi_F0p8_Y",
+   "tele_psi_F0p8_Z": "tele_psi_F0p8_Z"
+  },
+  "noise": {
+   "noise_ideal_XX": "link_XX",
+   "noise_ideal_YY": "link_YY",
+   "noise_ideal_ZZ": "link_ZZ"
+  },
+  "swap": {
+   "swap_ideal_XX": "swap_ideal_XX",
+   "swap_ideal_YY": "swap_ideal_YY",
+   "swap_ideal_ZZ": "swap_ideal_ZZ"
+  },
+  "purify": {
+   "pur_tomo_g0p2_XX": "pur_tomo_g0p2_XX",
+   "pur_tomo_g0p2_YY": "pur_tomo_g0p2_YY",
+   "pur_tomo_g0p2_ZZ": "pur_tomo_g0p2_ZZ",
+   "pur_g0p2_I_XX": "pur_g0p2_I_XX",
+   "pur_g0p2_I_YY": "pur_g0p2_I_YY",
+   "pur_g0p2_I_ZZ": "pur_g0p2_I_ZZ",
+   "pur_g0p2_SH_XX": "pur_g0p2_SH_XX",
+   "pur_g0p2_SH_YY": "pur_g0p2_SH_YY",
+   "pur_g0p2_SH_ZZ": "pur_g0p2_SH_ZZ"
+  },
+  "qkd": {
+   "qkd_th120_ZZ": "qkd_th120_ZZ",
+   "qkd_th120_XX": "qkd_th120_XX",
+   "qkd_th120_chsh_a0_b0": "qkd_th120_chsh_a0_b0",
+   "qkd_th120_chsh_a0_b1": "qkd_th120_chsh_a0_b1",
+   "qkd_th120_chsh_a1_b0": "qkd_th120_chsh_a1_b0",
+   "qkd_th120_chsh_a1_b1": "qkd_th120_chsh_a1_b1"
+  },
+  "rescue": {
+   "pur_tomo_ideal_XX": "link_XX",
+   "pur_tomo_ideal_YY": "link_YY",
+   "pur_tomo_ideal_ZZ": "link_ZZ",
+   "pur_ideal_I_XX": "pur_ideal_I_XX",
+   "pur_ideal_I_YY": "pur_ideal_I_YY",
+   "pur_ideal_I_ZZ": "pur_ideal_I_ZZ",
+   "swap_ideal_XX": "swap_ideal_XX",
+   "swap_ideal_YY": "swap_ideal_YY",
+   "swap_ideal_ZZ": "swap_ideal_ZZ"
+  },
+  "readout": {
+   "readout_0000": "readout_0000",
+   "readout_1111": "readout_1111"
+  }
+ },
+ "compiled": {
+  "link_XX": {
+   "compiled_two_qubit_gates": 1,
+   "compiled_depth": 4
+  },
+  "link_YY": {
+   "compiled_two_qubit_gates": 1,
+   "compiled_depth": 4
+  },
+  "link_ZZ": {
+   "compiled_two_qubit_gates": 1,
+   "compiled_depth": 3
+  },
+  "tele_psi_F0p8_X": {
+   "compiled_two_qubit_gates": 5,
+   "compiled_depth": 7
+  },
+  "tele_psi_F0p8_Y": {
+   "compiled_two_qubit_gates": 5,
+   "compiled_depth": 7
+  },
+  "tele_psi_F0p8_Z": {
+   "compiled_two_qubit_gates": 5,
+   "compiled_depth": 6
+  },
+  "swap_ideal_XX": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 5
+  },
+  "swap_ideal_YY": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 5
+  },
+  "swap_ideal_ZZ": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 5
+  },
+  "pur_tomo_g0p2_XX": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 6
+  },
+  "pur_tomo_g0p2_YY": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 6
+  },
+  "pur_tomo_g0p2_ZZ": {
+   "compiled_two_qubit_gates": 3,
+   "compiled_depth": 5
+  },
+  "pur_g0p2_I_XX": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 8
+  },
+  "pur_g0p2_I_YY": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 8
+  },
+  "pur_g0p2_I_ZZ": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 7
+  },
+  "pur_g0p2_SH_XX": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 8
+  },
+  "pur_g0p2_SH_YY": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 8
+  },
+  "pur_g0p2_SH_ZZ": {
+   "compiled_two_qubit_gates": 8,
+   "compiled_depth": 7
+  },
+  "qkd_th120_ZZ": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "qkd_th120_XX": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "qkd_th120_chsh_a0_b0": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "qkd_th120_chsh_a0_b1": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "qkd_th120_chsh_a1_b0": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "qkd_th120_chsh_a1_b1": {
+   "compiled_two_qubit_gates": 2,
+   "compiled_depth": 5
+  },
+  "pur_ideal_I_XX": {
+   "compiled_two_qubit_gates": 4,
+   "compiled_depth": 6
+  },
+  "pur_ideal_I_YY": {
+   "compiled_two_qubit_gates": 4,
+   "compiled_depth": 6
+  },
+  "pur_ideal_I_ZZ": {
+   "compiled_two_qubit_gates": 4,
+   "compiled_depth": 5
+  },
+  "readout_0000": {
+   "compiled_two_qubit_gates": 0,
+   "compiled_depth": 1
+  },
+  "readout_1111": {
+   "compiled_two_qubit_gates": 0,
+   "compiled_depth": 2
+  }
+ },
+ "readout": {
+  "e0": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "e1": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ }
+}

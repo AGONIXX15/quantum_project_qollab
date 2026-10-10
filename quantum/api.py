@@ -11,6 +11,11 @@ the job); ``full_batch`` sends every circuit in a single ``backend.run`` and
 ``rescue`` (one ``backend.run``, at most 16 circuits) is allowed as a
 single-job alternative. ``decode_only`` re-decodes saved counts offline.
 
+``run_level`` is the recommended UI entry point: on a simulator it runs the
+level directly; on IonQ it runs ``full_batch`` once, caches it, and serves every
+level from the cache (one job per Python execution; later IonQ jobs are refused
+with the code ``ionq_job_used``).
+
 From JS: ``import * as api from 'quantum.api'`` and call with
 ``.callPromisingKwargs({...})`` then ``.toJs()``.
 
@@ -35,6 +40,46 @@ VERSION = "0.1.0"
 ATTRIBUTION = "This effort is supported by Qollab & IonQ."
 IONQ_CODE = "ionq_use_full_batch"
 IONQ_MESSAGE = "IonQ allows one job per run: use full_batch"
+IONQ_USED_CODE = "ionq_job_used"
+IONQ_USED_MESSAGE = ("IonQ allows one job per run; results above come from that job. "
+                     "Press Run again to start a new job.")
+RUN_LEVELS = ("link", "teleport", "noise", "swap", "purify", "qkd", "rescue")
+_D = batch.DEFAULT_PARAMS  # single source of truth for every default below
+
+_PRECISION_PURIFY_F = 0.8  # default channel of purify in precision mode
+
+# One IonQ job per Python execution: set right before backend.run is attempted.
+_IONQ_JOB_USED = False
+_IONQ_CACHE: dict[str, Any] | None = None
+
+
+def _reset_ionq_state() -> None:
+    """Forget the IonQ job flag and cache (tests only)."""
+    global _IONQ_JOB_USED, _IONQ_CACHE
+    _IONQ_JOB_USED = False
+    _IONQ_CACHE = None
+
+
+def _cache_summary() -> dict[str, Any] | None:
+    """Slim view of the cached IonQ job (level ok flags, backend, timestamp)."""
+    c = _IONQ_CACHE
+    if not c:
+        return None
+    return {"backend": c.get("backend"), "timestamp": c.get("timestamp"), "shots": c.get("shots"),
+            "levels": {k: bool(v.get("ok")) for k, v in (c.get("levels") or {}).items()}}
+
+
+def _ionq_used() -> dict[str, Any]:
+    return {"ok": False, "code": IONQ_USED_CODE, "error": IONQ_USED_MESSAGE, "cached": _cache_summary()}
+
+
+def backend_diag(backend: Any) -> dict[str, Any]:
+    """Describe the backend object and the IonQ job flag (diagnostics; never raises)."""
+    try:
+        return {"ok": True, "module": type(backend).__module__, "name": str(getattr(backend, "name", None)),
+                "is_ionq": bool(an.is_ionq(backend)), "ionq_job_used": _IONQ_JOB_USED}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 # --------------------------------------------------------------------------
@@ -100,10 +145,11 @@ def info() -> dict[str, Any]:
          "params": {"shots": shots, "F1": _p(0.25, 1, d["swap"]["F1"]), "F2": _p(0.25, 1, d["swap"]["F2"]),
                     "mode": {**modes, "default": d["swap"]["mode"]}}},
         {"id": "purify", "title": "Distillation", "function": "level_purify",
-         "summary": "DEJMPS, fixed vs adaptive. Give exactly one of F, gamma or p.",
-         "params": {"shots": shots, "F": _p(0.25, 1, 0.8), "gamma": _p(0, 1, d["purify"]["gamma"]),
+         "summary": "DEJMPS, fixed vs adaptive. Give at most one of F, gamma or p "
+                    "(none: the default channel, gamma).",
+         "params": {"shots": shots, "F": _p(0.25, 1, None), "gamma": _p(0, 1, d["purify"]["gamma"]),
                     "p": {"default": None, "length": 4},
-                    "strategy": {"options": ["all", "predicted"], "default": "all"},
+                    "strategy": {"options": ["all", "predicted"], "default": d["purify"]["strategy"]},
                     "mode": {**modes, "default": d["purify"]["mode"]}}},
         {"id": "qkd", "title": "Catch the spy", "function": "level_qkd",
          "summary": "E91/BBM92 with a spy: QBER, CHSH, key rate.",
@@ -122,8 +168,11 @@ def info() -> dict[str, Any]:
     ]
     return {
         "ok": True, "version": VERSION, "attribution": ATTRIBUTION, "levels": levels,
+        "run_level": {"function": "run_level", "levels": list(RUN_LEVELS),
+                      "summary": "Recommended UI entry point: run_level(backend, level, **params). "
+                                 "Simulators run the level live; IonQ runs one cached full_batch."},
         "full_batch": {
-            "function": "full_batch", "max_circuits": batch.MAX_BATCH,
+            "function": "full_batch", "recommended_entry": "run_level", "max_circuits": batch.MAX_BATCH,
             "default_shots": 1000, "ionq_shots": 500,
             "params_schema": "dict level -> dict of that level's parameters; angles in degrees; "
                              "unknown keys are rejected; all values validated before anything runs",
@@ -145,8 +194,8 @@ def level_link(backend: Any, shots: int = 1000, seed: int = 0) -> dict[str, Any]
 
 @_guard()
 def level_teleport(
-    backend: Any, shots: int = 1000, theta_deg: float = 60.0, phi_deg: float = 0.0,
-    F: float | None = None, seed: int = 0,
+    backend: Any, shots: int = 1000, theta_deg: float = _D["teleport"]["theta_deg"],
+    phi_deg: float = _D["teleport"]["phi_deg"], F: float | None = _D["teleport"]["F"], seed: int = 0,
 ) -> dict[str, Any]:
     return teleport.run_teleport(
         backend, _shots(shots), math.radians(_num("theta_deg", theta_deg, 0, 180)),
@@ -157,8 +206,8 @@ def level_teleport(
 
 @_guard()
 def level_noise(
-    backend: Any, shots: int = 1000, Fs: Any = (0.95, 0.8, 0.6),
-    mode: str = "precision", seed: int = 0,
+    backend: Any, shots: int = 1000, Fs: Any = tuple(_D["noise"]["Fs"]),
+    mode: str = _D["noise"]["mode"], seed: int = 0,
 ) -> dict[str, Any]:
     fs = V.f_list("F", Fs)
     mode = _choice("mode", mode, ("teaching", "precision"))
@@ -167,8 +216,8 @@ def level_noise(
 
 @_guard()
 def level_swap(
-    backend: Any, shots: int = 1000, F1: float = 0.9, F2: float = 0.85,
-    mode: str = "precision", seed: int = 0,
+    backend: Any, shots: int = 1000, F1: float = _D["swap"]["F1"],
+    F2: float = _D["swap"]["F2"], mode: str = _D["swap"]["mode"], seed: int = 0,
 ) -> dict[str, Any]:
     return swap.run_swap(
         backend, _shots(shots), _num("F1", F1, 0.25, 1.0), _num("F2", F2, 0.25, 1.0),
@@ -179,10 +228,25 @@ def level_swap(
 @_guard()
 def level_purify(
     backend: Any, shots: int = 1000, F: float | None = None, gamma: float | None = None,
-    p: Any = None, strategy: str = "all", mode: str = "teaching", seed: int = 0,
+    p: Any = None, strategy: str = _D["purify"]["strategy"], mode: str = _D["purify"]["mode"],
+    seed: int = 0,
 ) -> dict[str, Any]:
-    spec = _spec_args(F, gamma, p)
+    """Channel choice: ``p`` > ``F`` > ``gamma``.
+
+    A given ``F`` or ``p`` overrides ``gamma`` (so the advertised default
+    gamma never conflicts). Giving both ``F`` and ``p`` is an error. With no
+    channel: ``gamma`` 0.2 in teaching mode, ``F`` 0.8 in precision mode (which
+    only supports Pauli channels).
+    """
     mode = _choice("mode", mode, ("teaching", "precision"))
+    if F is not None or p is not None:
+        gamma = None
+    elif gamma is None:
+        if mode == "precision":
+            F = _PRECISION_PURIFY_F
+        else:
+            gamma = _D["purify"]["gamma"]
+    spec = _spec_args(F, gamma, p)
     if mode == "precision" and "gamma" in spec:
         raise ValueError("precision mode only supports Pauli channels (F or p); use teaching for gamma")
     return purify.run_purify(
@@ -193,8 +257,8 @@ def level_purify(
 
 @_guard()
 def level_qkd(
-    backend: Any, shots: int = 1000, theta_deg: float = 90.0, F: float | None = None,
-    smart_direct: bool = False, beta_source: str = "split", seed: int = 0,
+    backend: Any, shots: int = 1000, theta_deg: float = _D["qkd"]["theta_deg"], F: float | None = None,
+    smart_direct: bool = _D["qkd"]["smart_direct"], beta_source: str = _D["qkd"]["beta_source"], seed: int = 0,
 ) -> dict[str, Any]:
     theta = math.radians(_num("theta_deg", theta_deg, 0, 180))
     if F is not None and theta != 0.0:
@@ -207,9 +271,11 @@ def level_qkd(
 
 @_guard(ionq_ok=True)
 def rescue(
-    backend: Any, shots: int = 1000, broken: str = "BOG-CAL", damage_kind: str = "werner",
-    damage_F: float = 0.7, damage_gamma: float = 0.2, damage_theta_deg: float = 180.0,
-    healthy_F: float = 0.95, target_F: float = 0.9, mode: str = "precision", seed: int = 0,
+    backend: Any, shots: int = 1000, broken: str = _D["rescue"]["broken"],
+    damage_kind: str = _D["rescue"]["damage"]["kind"], damage_F: float = _D["rescue"]["damage"]["F"],
+    damage_gamma: float = 0.2, damage_theta_deg: float = 180.0,
+    healthy_F: float = _D["rescue"]["healthy_F"], target_F: float = _D["rescue"]["target_F"],
+    mode: str = _D["rescue"]["mode"], seed: int = 0,
 ) -> dict[str, Any]:
     kind = _choice("damage_kind", damage_kind, ("werner", "damping", "spy"))
     damage = {"kind": kind}
@@ -219,22 +285,110 @@ def rescue(
         damage["gamma"] = _num("damage_gamma", damage_gamma, 0.0, 1.0)
     else:
         damage["theta"] = math.radians(_num("damage_theta_deg", damage_theta_deg, 0, 180))
-    return _rescue.run_rescue(
-        backend, _shots(shots), geo.normalize_link(broken), damage,
+    args = (
+        _shots(shots), geo.normalize_link(broken), damage,
         _num("healthy_F", healthy_F, 0.25, 1.0), _num("target_F", target_F, 0.3, 1.0),
         _choice("mode", mode, ("teaching", "precision")), int(seed),
     )
+    if an.is_ionq(backend):
+        if _IONQ_JOB_USED:
+            return _ionq_used()
+        return _rescue.run_rescue(backend, *args, before_run=_mark_ionq_used)
+    return _rescue.run_rescue(backend, *args)
 
 
+def _mark_ionq_used() -> None:
+    global _IONQ_JOB_USED
+    _IONQ_JOB_USED = True
+
+
+def _run_batch_once(backend: Any, shots: int | None, seed: int, params: Any) -> dict[str, Any]:
+    """``batch.run_full_batch`` with the IonQ one-job guard and cache (plain dict result)."""
+    global _IONQ_CACHE
+    n = None if shots is None else _shots(shots)
+    ionq = an.is_ionq(backend)
+    if ionq:
+        if _IONQ_JOB_USED:
+            return _ionq_used()
+        batch.resolve_params(_py(params))  # validate first: a typo must not burn the job
+        # the flag is set right before backend.run (compile errors do not burn the job)
+        out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params),
+                                               before_run=_mark_ionq_used))
+    else:
+        out = an.to_plain(batch.run_full_batch(backend, n, int(seed), _py(params)))
+    if ionq:
+        _IONQ_CACHE = out
+    return out
 
 
 @_guard(ionq_ok=True)
 def full_batch(
     backend: Any, shots: int | None = None, seed: int = 0, params: Any = None,
 ) -> dict[str, Any]:
-    """Whole experiment in ONE job (allowed on IonQ; validates every parameter first)."""
-    n = None if shots is None else _shots(shots)
-    return batch.run_full_batch(backend, n, int(seed), _py(params))
+    """Whole experiment in ONE job (allowed on IonQ once per execution; validates every parameter first)."""
+    return _run_batch_once(backend, shots, seed, params)
+
+
+def _batch_params(level: str, p: dict[str, Any]) -> dict[str, Any]:
+    """Map the flat API arguments of one level to ``full_batch`` ``params[level]``."""
+    p = dict(p)
+    if level == "qkd" and p.get("F") is not None:
+        raise ValueError("on IonQ the spy level (qkd) does not support Werner noise F; use theta_deg")
+    if level == "qkd":
+        p.pop("F", None)
+    if level == "purify":
+        p = {k: v for k, v in p.items() if v is not None}
+    if level == "rescue":
+        kind = p.pop("damage_kind", None)
+        dmg = {k[len("damage_"):]: p.pop(k) for k in ("damage_F", "damage_gamma", "damage_theta_deg") if k in p}
+        if kind is not None or dmg:
+            kind = kind or _D["rescue"]["damage"]["kind"]
+            keep = {"werner": "F", "damping": "gamma", "spy": "theta_deg"}.get(kind)
+            p["damage"] = {"kind": kind, **({keep: dmg[keep]} if keep in dmg else {})}
+    return p
+
+
+@_guard(ionq_ok=True)
+def run_level(backend: Any, level: str, params: Any = None, **kw: Any) -> dict[str, Any]:
+    """Recommended UI entry point: run one level, safe to click on any backend.
+
+    ``level`` is one of ``RUN_LEVELS``; ``params`` (a dict, positional from JS) and keyword
+    arguments are that level's usual
+    arguments (``shots``, ``seed`` and the level's own, degrees for angles).
+    Simulators call the level function directly. On IonQ the first call runs
+    ``full_batch`` once (the level's ``params`` replace its defaults; other
+    levels use defaults), caches it and returns this level's result with
+    ``source: "ionq_batch_cache"`` and ``batch_ok``; later calls are served from
+    the cache without any new job (their ``params`` are ignored and flagged by
+    ``params_ignored``). Known limit: ``F`` for qkd is not available on IonQ.
+    """
+    level = _choice("level", level, RUN_LEVELS)
+    params = {**(_py(params) or {}), **kw}  # positional dict (JS) merged with keyword arguments
+    if not an.is_ionq(backend):
+        return LEVEL_FUNCS[level](backend, **params)
+    shots, seed = params.pop("shots", None), params.pop("seed", 0)
+    fresh = _IONQ_CACHE is None
+    if fresh:
+        bp = _batch_params(level, params)
+        res = _run_batch_once(backend, shots, seed, {level: bp} if bp else None)
+        if res.get("ok") is False:
+            return res
+    else:
+        res = _IONQ_CACHE
+    lv = res["levels"].get(level)
+    out = {"ok": True, "source": "ionq_batch_cache", "batch_ok": all(
+        v.get("ok") for v in res["levels"].values()), "cached_run": not fresh}
+    if not fresh and (params or shots is not None):
+        out["params_ignored"] = True
+    if not lv or not lv.get("ok"):
+        return {**out, "ok": False, "error": (lv or {}).get("error", f"level {level} missing from the batch")}
+    return {**out, **{k: v for k, v in lv.items() if k != "ok"}}
+
+
+LEVEL_FUNCS: dict[str, Callable[..., dict[str, Any]]] = {
+    "link": level_link, "teleport": level_teleport, "noise": level_noise, "swap": level_swap,
+    "purify": level_purify, "qkd": level_qkd, "rescue": rescue,
+}
 
 
 # --------------------------------------------------------------------------
@@ -263,7 +417,23 @@ def decode_only(
 # is opened by its own function with a LITERAL path, registered here by name.
 # To add a recording: write `def _open_<name>(): return open("data/recorded/<name>.json", encoding="utf-8")`
 # and add it to RECORDED_OPENERS.
-RECORDED_OPENERS: dict[str, Callable[[], Any]] = {}
+def _open_basic_simulator_full():
+    return open("data/recorded/basic_simulator_full.json", encoding="utf-8")
+
+
+RECORDED_OPENERS: dict[str, Callable[[], Any]] = {
+    "basic_simulator_full": _open_basic_simulator_full,
+}
+
+
+def _mark_recorded(result: Any) -> Any:
+    """Label a loaded result (and its per-level results) as ``recorded`` for the UI."""
+    if isinstance(result, dict):
+        result["mode"] = "recorded"
+        for lv in (result.get("levels") or {}).values():
+            if isinstance(lv, dict) and "mode" in lv:
+                lv["mode"] = "recorded"
+    return result
 
 
 @_guard(needs_backend=False)
@@ -273,7 +443,7 @@ def load_recorded() -> dict[str, Any]:
     for name, opener in RECORDED_OPENERS.items():
         try:
             with opener() as fh:
-                runs.append({"name": name, "result": json.load(fh)})
+                runs.append({"name": name, "result": _mark_recorded(json.load(fh))})
         except (OSError, ValueError) as exc:
             errors.append({"file": name, "error": str(exc)})
     if errors:

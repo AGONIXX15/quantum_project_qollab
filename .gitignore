@@ -6,3 +6,4 @@ uv.lock
 # local AI context, not part of the project
 CLAUDE.md
 .claude/
+dist/
