@@ -407,3 +407,78 @@ def circuit_steps(qc: Any) -> list[dict[str, Any]]:
             }
         )
     return steps
+
+
+# --------------------------------------------------------------------------
+# Readout-error mitigation (tensored) and JSON helper
+# --------------------------------------------------------------------------
+
+to_plain = _plain  # public alias: numpy/tuples -> plain JSON types
+
+
+def readout_rates(
+    counts0: Counts, counts1: Counts, n_clbits: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Per-clbit readout errors from the |0...0> and |1...1> calibration runs.
+
+    Returns ``(e0, e1)``: e0[i] = P(read 1 | prepared 0), e1[i] = P(read 0 |
+    prepared 1). Tensored model: errors independent per qubit.
+    """
+    b0, w0 = bits_from_counts(counts0, n_clbits)
+    b1, w1 = bits_from_counts(counts1, n_clbits)
+    e0 = (b0 * w0[:, None]).sum(axis=0) / w0.sum()
+    e1 = ((1 - b1) * w1[:, None]).sum(axis=0) / w1.sum()
+    return e0.astype(float), e1.astype(float)
+
+
+def mitigated_correlator(
+    counts: Counts,
+    indices: Sequence[int],
+    e0: Sequence[float],
+    e1: Sequence[float],
+    flips: Sequence[int] | None = None,
+) -> Metric | None:
+    """Parity correlator <PP> with tensored readout mitigation.
+
+    The distribution over the involved clbits is multiplied by the inverse of
+    the tensor product of per-clbit confusion matrices (columns = true value),
+    then the parity expectation is taken. The estimator is linear in the
+    empirical distribution, so its variance is (sum w^2 p - c^2) / N with the
+    weights w = parity_signs^T M^-1. Perfect readout (e0 = e1 = 0) reduces to
+    ``correlator``. Returns None when a confusion matrix is (nearly) singular
+    (|1 - e0 - e1| < 0.05 for a used clbit): mitigation is skipped.
+
+    The value and CI are clipped to [-1, 1] (``clipped`` flags it). The
+    calibration uncertainty of e0/e1 is NOT propagated, and the mapping from
+    logical to physical qubits is assumed to be the identity.
+
+    Pauli-frame ``flips`` clbits are treated as ordinary extra bits.
+    """
+    idx = list(indices)
+    flip = list(flips or [])
+    bits_used = idx + flip
+    if any(abs(1.0 - e0[c] - e1[c]) < 0.05 for c in bits_used):
+        return None
+    k = len(bits_used)
+    bits, w = bits_from_counts(counts, max(bits_used) + 1)
+    sub = bits[:, bits_used].astype(np.int64)
+    code = (sub << np.arange(k)).sum(axis=1)
+    n = float(w.sum())
+    p = np.bincount(code, weights=w, minlength=2**k) / n
+    minv = np.ones((1, 1))
+    for j in range(k):  # kron order: highest bit first
+        c = bits_used[k - 1 - j]
+        m = np.array([[1 - e0[c], e1[c]], [e0[c], 1 - e1[c]]])
+        minv = np.kron(minv, np.linalg.inv(m))
+    x = np.arange(2**k)
+    signs = np.where(np.array([bin(int(v)).count("1") % 2 for v in x]) == 1, -1.0, 1.0)
+    wts = signs @ minv
+    raw_val = float(wts @ p)
+    var = max(float((wts**2) @ p) - raw_val * raw_val, 0.0) / n
+    half = 1.96 * math.sqrt(var)
+    clip = lambda v: min(1.0, max(-1.0, v))  # noqa: E731
+    return {
+        "value": clip(raw_val), "raw": raw_val, "var": var,
+        "ci95": [clip(raw_val - half), clip(raw_val + half)],
+        "shots": int(n), "empty": n == 0, "clipped": abs(raw_val) > 1.0,
+    }

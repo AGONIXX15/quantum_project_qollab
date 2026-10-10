@@ -179,6 +179,27 @@ def test_choose_u_stable_under_shot_noise():
     assert hits >= 18
 
 
+def _rate(corr, n, good, trials=300, seed=7):
+    rng = np.random.default_rng(seed)
+    hits = 0
+    for _ in range(trials):
+        c = {}
+        for b, v in zip(("XX", "YY", "ZZ"), corr):
+            q = rng.binomial(n, (1 - v) / 2) / n
+            c[b] = {"value": 1 - 2 * q, "var": 0.0}
+        p_hat = an.bell_diagonal(c["XX"], c["YY"], c["ZZ"])
+        hits += purify.choose_u(p_hat, shots=n)[0] in good
+    return hits / trials
+
+
+def test_choose_u_hit_rates_documented_in_docstring():
+    damp = an.correlators_from_bell_diagonal(noise.bell_diag_of(noise.damping_spec(0.2)))
+    werner = an.correlators_from_bell_diagonal(noise.werner_probs(0.9))
+    assert _rate(damp, 1000, ("SH", "HSH")) > 0.85       # docstring: ~93 %
+    assert 0.3 < _rate(damp, 300, ("SH", "HSH")) < 0.65  # docstring: ~45 %
+    assert _rate(werner, 300, ("I",)) > 0.95 and _rate(werner, 1000, ("I",)) > 0.95
+
+
 def test_damping_choice_is_the_argmax_set():
     spec = noise.damping_spec(0.2)
     pd = noise.bell_diag_of(spec)

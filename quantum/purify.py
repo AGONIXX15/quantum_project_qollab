@@ -152,7 +152,7 @@ def choose_u(
     candidates: Sequence[str] = U_NAMES,
     margin: float = 1e-2,
     shots: float | None = None,
-    z: float = 3.0,
+    z: float = 2.5,
 ) -> tuple[str, dict[str, float]]:
     """Best U by predicted F'; 'I' is kept unless another U clearly gains.
 
@@ -160,6 +160,24 @@ def choose_u(
     ``shots`` (per basis) is given, also ``z`` standard errors of that gain
     (delta method on the three correlators), so shot noise does not switch to
     an equivalent U when the noise is symmetric (e.g. Werner).
+
+    Trade-off between a false switch (Werner, where I is right) and the hit
+    rate (T1 damping gamma = 0.2, where SH/HSH is right). Simulated with
+    1000 tomographies per cell (binomial shot noise only):
+
+    ======  ===========================  ============================
+    z       Werner 0.9: keeps I          damping 0.2: picks SH or HSH
+            (300 / 1000 shots)           (300 / 1000 shots)
+    ======  ===========================  ============================
+    2.0     96.5 % / 96.3 %              59 % / 97 %
+    2.5     98.7 % / 98.8 %              45 % / 93 %
+    3.0     99.4 % / 99.5 %              35 % / 84 %
+    ======  ===========================  ============================
+
+    z = 2.5 is the default: a wrong switch costs little for symmetric noise,
+    but missing the adaptive gain costs a lot, so it is not pushed higher;
+    with only ~300 shots per basis the choice for damping is often missed
+    (use more tomography shots for a reliable adaptive choice).
     """
     p = normalize_p(p)
     pred = {u: dejmps_map(permute(p, u))[0][0] for u in candidates}
@@ -375,7 +393,7 @@ def _run_stats(per_basis: dict[str, dict[str, int]]) -> dict[str, Any]:
     cost = [2.0 / hi if hi > 0 else math.inf, 2.0 / lo if lo > 0 else math.inf]
     return {
         "fid": fid, "p_s": ps, "p_s_ci95": [lo, hi], "cost": 2.0 / ps if ps > 0 else math.inf,
-        "cost_ci95": cost, "per_basis": per_basis,
+        "cost_ci95": cost, "per_basis": per_basis, "corr": corr,
     }
 
 
@@ -396,7 +414,8 @@ def decode_purify(
         c = counts_by_id[name]
         return _injected(circuits[name], c, errs, rng) if mode == "precision" else c
 
-    tomo = {p: an.correlator(counts_for(_tomo_name(mode, spec, p), {1: spec}), [0, 1]) for p in BASES}
+    tomo_counts = {p: counts_for(_tomo_name(mode, spec, p), {1: spec}) for p in BASES}
+    tomo = {p: an.correlator(c, [0, 1]) for p, c in tomo_counts.items()}
     f_in = an.bell_fidelity(tomo["XX"], tomo["YY"], tomo["ZZ"])
     p_hat = normalize_p(an.bell_diagonal(tomo["XX"], tomo["YY"], tomo["ZZ"]))
 
@@ -447,7 +466,14 @@ def decode_purify(
         "bloch": {"theory": [0.0, 0.0, 0.0]},
         "notes": list(_NOTES[mode]),
     }
-    return {"metrics": metrics, "viz": viz}
+    extra = {
+        "tomo_corr": tomo,
+        "per_basis": {"tomo": tomo_counts, **{u: st["per_basis"] for u, st in stats.items()}},
+        "stats": {u: {k: st[k] for k in ("p_s", "p_s_ci95", "cost", "cost_ci95", "fid", "corr")}
+                  for u, st in stats.items()},
+        "p_hat": p_hat,
+    }
+    return {"metrics": metrics, "viz": viz, "extra": extra}
 
 
 def run_purify(
