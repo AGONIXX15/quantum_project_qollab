@@ -329,3 +329,57 @@ def backend_name(backend: Any) -> str:
     if callable(name):
         name = name()
     return str(name) if name else type(backend).__name__
+
+
+# --------------------------------------------------------------------------
+# Visualization payload helpers
+# --------------------------------------------------------------------------
+
+def sample_parity(
+    counts: Counts,
+    indices: Sequence[int],
+    flips: Sequence[int] | None = None,
+    k: int = 40,
+    seed: int = 0,
+) -> list[int]:
+    """Draw ``k`` individual shots (reproducibly) and return their parity bits.
+
+    The parity covers ``indices`` XOR ``flips`` (Pauli-frame corrected), so the
+    UI can animate photons that arrive "equal" (0) or "different" (1). With a
+    single index and flips it is just one corrected bit. The draws are an
+    i.i.d. resample of the counts for animation, NOT the real shot order.
+    """
+    all_idx = list(indices) + list(flips or [])
+    if not counts:
+        return []
+    bits, w = bits_from_counts(counts, max(all_idx + [0]) + 1)
+    rng = np.random.default_rng(seed)
+    rows = rng.choice(bits.shape[0], size=min(k, int(w.sum())), p=w / w.sum())
+    return [int(v) for v in parity(bits[rows], all_idx)]
+
+
+def circuit_steps(qc: Any) -> list[dict[str, Any]]:
+    """Serialize ``qc.data`` as a gate list: ``{name, qubits, clbits, params}``.
+
+    Barriers are skipped. Parameters are plain floats where numeric.
+    """
+    steps = []
+    for inst in qc.data:
+        op = inst.operation
+        if op.name == "barrier":
+            continue
+        params = []
+        for p in op.params:
+            try:
+                params.append(float(p))
+            except (TypeError, ValueError):
+                params.append(str(p))
+        steps.append(
+            {
+                "name": op.name,
+                "qubits": [qc.find_bit(q).index for q in inst.qubits],
+                "clbits": [qc.find_bit(c).index for c in inst.clbits],
+                "params": params,
+            }
+        )
+    return steps
