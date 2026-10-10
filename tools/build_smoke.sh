@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/dist/qollab_smoke"
 rm -rf "$DEST"
 mkdir -p "$DEST"
-cp "$ROOT"/tools/qollab_smoke/index.html "$ROOT"/tools/qollab_smoke/main.js "$ROOT"/tools/qollab_smoke/main.css "$DEST"/
+cp "$ROOT"/tools/qollab_smoke/index.html "$ROOT"/tools/qollab_smoke/main.js "$ROOT"/tools/qollab_smoke/main.css "$ROOT"/tools/qollab_smoke/smoke_probe.py "$DEST"/
 cp -r "$ROOT/quantum" "$DEST/quantum"
 find "$DEST/quantum" -name "__pycache__" -type d -prune -exec rm -rf {} +
 cp -r "$ROOT/data" "$DEST/data"

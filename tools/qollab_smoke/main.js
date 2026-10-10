@@ -4,6 +4,7 @@
 // Qollab only resolves STATIC imports of Python modules (dynamic import('quantum.api') fails);
 // if this import fails the page never leaves the "Loading..." status set in index.html.
 import * as api from 'quantum.api';
+import * as probe from 'smoke_probe';
 const status = document.getElementById('status');
 const out = document.getElementById('out');
 const log = document.querySelector('#log tbody');
@@ -96,6 +97,11 @@ async function main() {
   const pos = (fn, ...args) => () => fn.callPromising(backend, ...args);
   const shots = { shots: 300 };
 
+  // IonQ submit probes: ONE job each, press Stop and Run between them.
+  addButton('IonQ probe: 1 raw Bell circuit', pos(probe.ionq_probe, 0, 100));
+  addButton('IonQ probe: first 1 batch circuit', pos(probe.ionq_probe, 1, 100));
+  addButton('IonQ probe: first 10 batch circuits', pos(probe.ionq_probe, 10, 100));
+  addButton('IonQ probe: all 29 batch circuits', pos(probe.ionq_probe, 29, 100));
   addButton('Diagnose backend', async () => {
     // Two positional calls in a row: same_object tells whether JS hands Python the SAME backend object.
     const a = toPlain(await api.backend_diag.callPromising(backend));
