@@ -6,7 +6,7 @@ from qiskit.circuit import ControlFlowOp
 
 from qiskit.providers.fake_provider import GenericBackendV2
 
-from quantum import execute, links, noise, teleport
+from quantum import execute, links, noise, purify, qkd, swap, teleport
 
 FORBIDDEN = {"reset", "initialize", "state_preparation", "if_else", "while_loop", "for_loop", "switch_case"}
 
@@ -19,6 +19,14 @@ def all_circuits() -> list[QuantumCircuit]:
         *noise.build_damping(0.3),
         *teleport.build_teleport(0.4, 1.1),
         *teleport.build_teleport(0.4, 1.1, F=0.8),
+        *swap.build_swap(0.9, 0.85, "teaching"),
+        *swap.build_swap(mode="precision"),
+        *purify.build_purify(noise.werner_spec(0.8), purify.U_NAMES),
+        *purify.build_purify(noise.damping_spec(0.2), ("I", "SH")),
+        *purify.build_purify(noise.pauli_spec((0.8, 0, 0.2, 0)), ("I", "S"), noise.werner_spec(0.7)),
+        *purify.build_purify(None, ("I", "HSH"), mode="precision"),
+        *qkd.build_qkd(2.0, smart_direct=True),
+        *qkd.build_qkd(0.0, F=0.85),
     ]
 
 

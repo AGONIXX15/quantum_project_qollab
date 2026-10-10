@@ -23,6 +23,7 @@ import re
 from typing import Any
 
 from qiskit import QuantumCircuit, transpile
+from qiskit.transpiler.passes import RemoveBarriers
 
 from . import analysis as an
 
@@ -70,13 +71,15 @@ def compile_for(
 ) -> list[QuantumCircuit]:
     """Compile ``circuits`` for ``backend`` keeping each at its logical width."""
     if an.is_ionq(backend):
+        # Barriers only mark the channel point for the Python decoder.
+        stripped = [RemoveBarriers()(qc) for qc in circuits]
         try:
             return transpile(
-                circuits, basis_gates=IONQ_BASIS, optimization_level=1,
+                stripped, basis_gates=IONQ_BASIS, optimization_level=1,
                 seed_transpiler=seed,
             )
         except Exception:  # noqa: BLE001 - fall back to the logical circuits
-            return list(circuits)
+            return stripped
     out = []
     for qc in circuits:
         n = qc.num_qubits

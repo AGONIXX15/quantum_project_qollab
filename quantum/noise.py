@@ -50,6 +50,7 @@ from typing import Any, Sequence
 
 import numpy as np
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister, transpile
+from qiskit.quantum_info import Clifford, Pauli
 from qiskit.circuit.library import StatePreparation
 
 from . import analysis as an
@@ -78,16 +79,37 @@ def _real_rotation(o: np.ndarray) -> tuple[float, bool]:
     return 2.0 * math.atan2(o[1, 0], o[0, 0]), bool(flip)
 
 
-def env_prep(F: float) -> QuantumCircuit:
-    """2-qubit circuit preparing |e(F)> on (env0, env1) with a single CX.
+def werner_probs(F: float) -> tuple[float, float, float, float]:
+    """Pauli weights (p_I, p_X, p_Y, p_Z) of the Werner(F) channel."""
+    q = (1.0 - F) / 3.0
+    return (F, q, q, q)
+
+
+def env_state_probs(p: Sequence[float]) -> np.ndarray:
+    """Environment amplitudes for a Pauli channel p = (p_I, p_X, p_Y, p_Z).
+
+    Index = env1*2 + env0: 00 -> I, env0=1 -> X (CX), env1=1 -> Z (CZ),
+    both -> Y (up to a phase that the orthogonal env states make irrelevant).
+    """
+    pi, px, py, pz = (math.sqrt(max(float(v), 0.0)) for v in p)
+    return np.array([pi, px, pz, py])
+
+
+def env_state(F: float) -> np.ndarray:
+    """Target amplitudes of |e(F)> in Qiskit order (index = env1*2 + env0)."""
+    return env_state_probs(werner_probs(F))
+
+
+def env_prep_probs(p: Sequence[float]) -> QuantumCircuit:
+    """2-qubit circuit preparing the environment of a Pauli channel with 1 CX.
 
     Schmidt form: the amplitude matrix M[env1, env0] = U diag(s) V^T, so the
     state is (U x V)(s0|00> + s1|11>): one RY and one CX create the Schmidt
     pair, then local real rotations U (on env1) and V (on env0) finish it.
     """
-    if not 0.0 <= F <= 1.0:
-        raise ValueError("F must be in [0, 1]")
-    u, s, vt = np.linalg.svd(env_state(F).reshape(2, 2))
+    if abs(sum(p) - 1.0) > 1e-9 or min(p) < -1e-12:
+        raise ValueError("p must be a probability vector")
+    u, s, vt = np.linalg.svd(env_state_probs(p).reshape(2, 2))
     qc = QuantumCircuit(2, name="env_prep")
     qc.ry(2.0 * math.atan2(s[1], s[0]), 0)
     qc.cx(0, 1)
@@ -99,10 +121,11 @@ def env_prep(F: float) -> QuantumCircuit:
     return qc
 
 
-def env_state(F: float) -> np.ndarray:
-    """Target amplitudes of |e(F)> in Qiskit order (index = env1*2 + env0)."""
-    q = math.sqrt((1.0 - F) / 3.0)
-    return np.array([math.sqrt(F), q, q, q])
+def env_prep(F: float) -> QuantumCircuit:
+    """Environment preparation for the Werner(F) channel (1 CX)."""
+    if not 0.0 <= F <= 1.0:
+        raise ValueError("F must be in [0, 1]")
+    return env_prep_probs(werner_probs(F))
 
 
 def env_prep_cx_counts(F: float) -> dict[str, int]:
@@ -129,6 +152,208 @@ def apply_damping(qc: QuantumCircuit, b: Any, env: Any, gamma: float) -> None:
     theta = 2.0 * math.asin(math.sqrt(gamma))
     qc.cry(theta, b, env)
     qc.cx(env, b)
+
+
+# --------------------------------------------------------------------------
+# Channel specs shared by levels 4-6. A spec is a plain dict:
+#   {"kind": "werner", "F": F} | {"kind": "pauli", "p": (pI, pX, pY, pZ)}
+#   | {"kind": "damping", "gamma": g}   (or None for a clean link)
+# --------------------------------------------------------------------------
+
+Spec = dict[str, Any] | None
+
+
+def werner_spec(F: float) -> dict[str, Any]:
+    return {"kind": "werner", "F": float(F)}
+
+
+def pauli_spec(p: Sequence[float]) -> dict[str, Any]:
+    return {"kind": "pauli", "p": tuple(float(v) for v in p)}
+
+
+def damping_spec(gamma: float) -> dict[str, Any]:
+    return {"kind": "damping", "gamma": float(gamma)}
+
+
+def make_spec(
+    F: float | None = None, gamma: float | None = None, p: Sequence[float] | None = None
+) -> Spec:
+    """Build a spec from flat keyword arguments (at most one may be given)."""
+    given = [v is not None for v in (F, gamma, p)]
+    if sum(given) > 1:
+        raise ValueError("give only one of F, gamma, p")
+    if F is not None:
+        return werner_spec(F)
+    if gamma is not None:
+        return damping_spec(gamma)
+    if p is not None:
+        return pauli_spec(p)
+    return None
+
+
+def n_env(spec: Spec) -> int:
+    """Environment qubits a spec needs in the teaching (circuit) mode."""
+    if spec is None:
+        return 0
+    return 1 if spec["kind"] == "damping" else 2
+
+
+def apply_channel(qc: QuantumCircuit, b: Any, env: Sequence[Any], spec: Spec) -> None:
+    """Append the spec's channel on ``b`` using ``n_env(spec)`` env qubits."""
+    if spec is None:
+        return
+    kind = spec["kind"]
+    if kind == "werner":
+        apply_werner(qc, b, env[0], env[1], spec["F"])
+    elif kind == "pauli":
+        qc.compose(env_prep_probs(spec["p"]), [env[0], env[1]], inplace=True)
+        qc.cx(env[0], b)
+        qc.cz(env[1], b)
+    elif kind == "damping":
+        apply_damping(qc, b, env[0], spec["gamma"])
+    else:
+        raise ValueError(f"unknown channel kind {kind!r}")
+
+
+def pauli_probs(spec: Spec) -> tuple[float, float, float, float]:
+    """Pauli weights of a Pauli-type spec (needed by the precision mode)."""
+    if spec is None:
+        return (1.0, 0.0, 0.0, 0.0)
+    if spec["kind"] == "werner":
+        return werner_probs(spec["F"])
+    if spec["kind"] == "pauli":
+        return tuple(spec["p"])  # type: ignore[return-value]
+    raise ValueError("damping is not a Pauli channel; use the teaching mode")
+
+
+def bell_diag_of(spec: Spec) -> tuple[float, float, float, float]:
+    """Bell-diagonal weights of Phi+ through the channel (Pauli twirl for damping)."""
+    if spec is None or spec["kind"] != "damping":
+        return pauli_probs(spec)
+    th = theory_damping(spec["gamma"])
+    wrap = lambda v: {"value": v}  # noqa: E731
+    return an.bell_diagonal(wrap(th["XX"]), wrap(th["YY"]), wrap(th["ZZ"]))
+
+
+def spec_label(spec: Spec) -> str:
+    """Short label for circuit names (sanitized later by safe_name)."""
+    if spec is None:
+        return "ideal"
+    if spec["kind"] == "werner":
+        return f"F{spec['F']:g}"
+    if spec["kind"] == "damping":
+        return f"g{spec['gamma']:g}"
+    return "p" + "_".join(f"{v:g}" for v in spec["p"])
+
+
+def build_pair(name: str, pair: str, spec: Spec) -> QuantumCircuit:
+    """Bell pair + spec channel on B measured in ``pair`` (one tomography circuit)."""
+    a, b = QuantumRegister(1, "A"), QuantumRegister(1, "B")
+    regs = [a, b]
+    env = QuantumRegister(n_env(spec), "env") if n_env(spec) else None
+    if env is not None:
+        regs.append(env)
+    m = ClassicalRegister(2, "m")
+    qc = QuantumCircuit(*regs, m, name=safe_name(name))
+    qc.h(a[0])
+    qc.cx(a[0], b[0])
+    qc.barrier(label="channel")
+    if env is not None:
+        apply_channel(qc, b[0], list(env), spec)
+    rotate_to_basis(qc, a[0], pair[0])
+    rotate_to_basis(qc, b[0], pair[1])
+    qc.measure(a[0], m[0])
+    qc.measure(b[0], m[1])
+    return qc
+
+
+# --------------------------------------------------------------------------
+# Precision-mode engine: sample the channel's Pauli error per shot in Python
+# and propagate it through the (Clifford) rest of the circuit.
+# --------------------------------------------------------------------------
+
+def channel_tail(qc: QuantumCircuit) -> tuple[QuantumCircuit, dict[int, int]]:
+    """Split a circuit at its ``channel`` barrier.
+
+    Returns the unitary instructions after the barrier (as a circuit on the
+    same qubit indices) and the map qubit index -> clbit index of its measures.
+    """
+    tail = QuantumCircuit(qc.num_qubits)
+    meas: dict[int, int] = {}
+    seen = False
+    for inst in qc.data:
+        op = inst.operation
+        if op.name == "barrier":
+            seen = seen or op.label == "channel"
+            continue
+        if not seen:
+            continue
+        idx = [qc.find_bit(q).index for q in inst.qubits]
+        if op.name == "measure":
+            meas[idx[0]] = qc.find_bit(inst.clbits[0]).index
+        else:
+            tail.append(op, idx)
+    return tail, meas
+
+
+def error_flip_masks(qc: QuantumCircuit, qubits: Sequence[int]) -> dict[int, list[int]]:
+    """Per error qubit, the clbit-flip bitmask of I, X, Y, Z injected at the barrier.
+
+    The error is propagated forward through the Clifford tail (U P U^dagger);
+    a measured qubit's bit flips iff the propagated Pauli has an X component
+    there. Masks of simultaneous errors combine by XOR.
+    """
+    if not any(i.operation.name == "barrier" and i.operation.label == "channel" for i in qc.data):
+        raise ValueError("circuit has no 'channel' barrier")
+    tail, meas = channel_tail(qc)
+    if not meas:
+        raise ValueError("no measured qubits after the channel barrier")
+    try:
+        cliff = Clifford(tail)
+    except Exception as exc:  # noqa: BLE001 - qiskit raises QiskitError
+        raise ValueError(f"the circuit after the channel is not Clifford: {exc}") from exc
+    n = qc.num_qubits
+    out: dict[int, list[int]] = {}
+    for q in qubits:
+        masks = []
+        for xb, zb in ((0, 0), (1, 0), (1, 1), (0, 1)):  # I, X, Y, Z
+            x = np.zeros(n, dtype=bool)
+            z = np.zeros(n, dtype=bool)
+            x[q], z[q] = bool(xb), bool(zb)
+            ev = Pauli((z, x)).evolve(cliff, frame="s")
+            masks.append(sum(1 << c for qm, c in meas.items() if ev.x[qm]))
+        out[q] = masks
+    return out
+
+
+def apply_pauli_flips(
+    counts: dict[str, int],
+    n_clbits: int,
+    masks: dict[int, list[int]],
+    probs: dict[int, Sequence[float]],
+    rng: np.random.Generator,
+) -> dict[str, int]:
+    """Sample independent Pauli errors per shot on the given qubits.
+
+    ``masks``/``probs`` are keyed by error qubit (see ``error_flip_masks``).
+    Each distinct outcome's shots are split multinomially over all error
+    combinations (vectorized) and the outcome is XOR-flipped by the combined
+    mask. Single classical register assumed (keys without spaces).
+    """
+    bits, w = an.bits_from_counts(counts, n_clbits)
+    vals = (bits.astype(np.int64) << np.arange(n_clbits)).sum(axis=1)
+    qs = list(masks)
+    combo_p = np.ones(1)
+    combo_m = np.zeros(1, dtype=np.int64)
+    for q in qs:
+        pq = np.asarray(probs[q], dtype=float)
+        combo_p = (combo_p[:, None] * pq[None, :]).ravel()
+        combo_m = (combo_m[:, None] ^ np.asarray(masks[q], dtype=np.int64)[None, :]).ravel()
+    split = rng.multinomial(w, combo_p / combo_p.sum())  # [K, C]
+    new_vals = vals[:, None] ^ combo_m[None, :]
+    uniq, inv = np.unique(new_vals.ravel(), return_inverse=True)
+    tot = np.bincount(inv.ravel(), weights=split.ravel()).astype(np.int64)
+    return {format(int(v), f"0{n_clbits}b"): int(t) for v, t in zip(uniq, tot) if t}
 
 
 def _fkey(F: float) -> str:

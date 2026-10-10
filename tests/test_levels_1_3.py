@@ -34,7 +34,7 @@ def test_link_ideal():
     r = links.run_link(BasicSimulator(), SHOTS, **OPTS)
     assert r["metrics"]["fidelity"]["value"] >= 0.98
     assert within(r["metrics"]["corr_XX"]) and r["metrics"]["corr_YY"]["value"] < -0.95
-    assert r["viz"]["leak"] == 0.0 and len(r["viz"]["samples"]) == 40
+    assert r["viz"]["leak"] == {"value": 0.0, "source": "circuit"} and len(r["viz"]["samples"]) == 40
     assert all(c["two_qubit_gates"] == 1 for c in r["circuits"])
 
 
@@ -115,7 +115,7 @@ def test_teleport_noisy():
     m = r["metrics"]["fidelity"]
     assert m["theory"] == pytest.approx(0.86667, abs=1e-4)
     assert within(m) and m["classical_bound"] == pytest.approx(2 / 3)
-    assert r["viz"]["leak"] == pytest.approx(0.2)
+    assert r["viz"]["leak"]["value"] == pytest.approx(0.2)
 
 
 def test_duplicate_F_rejected():

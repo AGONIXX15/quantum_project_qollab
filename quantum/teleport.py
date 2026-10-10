@@ -130,7 +130,7 @@ def decode_teleport(
             "theory": r_th,
             "input": r_in,
         },
-        "leak": 0.0 if F is None else 1.0 - F,
+        "leak": {"value": 0.0 if F is None else 1.0 - F, "source": "circuit"},
     }
     return {"metrics": metrics, "viz": viz}
 

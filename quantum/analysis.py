@@ -153,7 +153,7 @@ def correlator(
 # Bell-state figures of merit
 # --------------------------------------------------------------------------
 
-def _ac_var(c: Metric) -> float:
+def ac_var(c: Metric) -> float:
     """Agresti-Coull variance of a correlator dict (falls back to c['var'])."""
     n = c.get("shots")
     if not n:
@@ -173,7 +173,7 @@ def bell_fidelity(xx: Metric, yy: Metric, zz: Metric) -> Metric:
     var_P = 4 q~(1-q~)/(N+4). Correlators without ``shots`` keep their ``var``.
     """
     raw = (1.0 + xx["value"] - yy["value"] + zz["value"]) / 4.0
-    var = sum(_ac_var(c) for c in (xx, yy, zz)) / 16.0
+    var = sum(ac_var(c) for c in (xx, yy, zz)) / 16.0
     half = 1.96 * math.sqrt(var)
     clip = lambda x: min(1.0, max(0.0, x))  # noqa: E731
     return {
@@ -196,6 +196,20 @@ def bell_diagonal(xx: Metric, yy: Metric, zz: Metric) -> tuple[float, float, flo
         (1 + x + y - z) / 4,
         (1 - x - y - z) / 4,
         (1 - x + y + z) / 4,
+    )
+
+
+def correlators_from_bell_diagonal(p: Sequence[float]) -> tuple[float, float, float]:
+    """(<XX>, <YY>, <ZZ>) of a Bell-diagonal state with weights (p_I, p_X, p_Y, p_Z).
+
+    Inverse of ``bell_diagonal``: Phi+ = (1,-1,1), Psi+ (X error) = (1,1,-1),
+    Psi- (Y error) = (-1,-1,-1), Phi- (Z error) = (-1,1,1).
+    """
+    pi, px, py, pz = p
+    return (
+        pi + px - py - pz,
+        -pi + px - py + pz,
+        pi - px - py + pz,
     )
 
 
@@ -341,18 +355,28 @@ def sample_parity(
     flips: Sequence[int] | None = None,
     k: int = 40,
     seed: int = 0,
+    postselect: Sequence[tuple[int, int]] | None = None,
 ) -> list[int]:
     """Draw ``k`` individual shots (reproducibly) and return their parity bits.
 
     The parity covers ``indices`` XOR ``flips`` (Pauli-frame corrected), so the
     UI can animate photons that arrive "equal" (0) or "different" (1). With a
-    single index and flips it is just one corrected bit. The draws are an
+    single index and flips it is just one corrected bit. ``postselect`` keeps
+    only shots with bit i == bit j for every pair. The draws are an
     i.i.d. resample of the counts for animation, NOT the real shot order.
     """
     all_idx = list(indices) + list(flips or [])
     if not counts:
         return []
-    bits, w = bits_from_counts(counts, max(all_idx + [0]) + 1)
+    ps_idx = [i for pair in (postselect or []) for i in pair]
+    bits, w = bits_from_counts(counts, max(all_idx + ps_idx + [0]) + 1)
+    if postselect:
+        keep = np.ones(bits.shape[0], dtype=bool)
+        for i, j in postselect:
+            keep &= bits[:, i] == bits[:, j]
+        bits, w = bits[keep], w[keep]
+        if w.sum() == 0:
+            return []
     rng = np.random.default_rng(seed)
     rows = rng.choice(bits.shape[0], size=min(k, int(w.sum())), p=w / w.sum())
     return [int(v) for v in parity(bits[rows], all_idx)]

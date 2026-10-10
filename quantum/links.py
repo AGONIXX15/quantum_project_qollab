@@ -95,7 +95,7 @@ def decode_link(counts_by_id: dict[str, dict[str, int]], prefix: str = "link", s
             # vector is zero (holds for the ideal Bell pair only).
             "theory": [0.0, 0.0, 0.0],
         },
-        "leak": 0.0,
+        "leak": {"value": 0.0, "source": "circuit"},
     }
     return {"metrics": metrics, "viz": viz}
 
