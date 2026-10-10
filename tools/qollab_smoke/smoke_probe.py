@@ -67,3 +67,70 @@ def ionq_probe(backend: Any, n: int = 0, shots: int = 100) -> dict[str, Any]:
         out["traceback"] = traceback.format_exc()[-2500:]
     out["elapsed_s"] = round(time.time() - t0, 3)
     return out
+
+
+# --- Packing probe: Qollab's IonQ proxy accepts only ionq.circuit.v1 (ONE circuit per job). ---
+# Several compiled circuits are placed side by side on disjoint qubits, with one shared
+# classical register; sub-circuit k owns clbits [off_k, off_k + n_k). Counts are split back
+# per sub-circuit in Python (Qiskit little-endian: rightmost character = clbit 0).
+
+PACK_GROUPS = {"link_readout": ("link_", "readout_"), "teleport": ("tele_",), "qkd": ("qkd_",)}
+
+
+def pack(circuits: list[Any]) -> tuple[Any, list[tuple[str, int, int]]]:
+    """Return (packed circuit, [(name, clbit offset, clbit count), ...])."""
+    from qiskit import ClassicalRegister, QuantumCircuit
+
+    nq = sum(c.num_qubits for c in circuits)
+    nc = sum(c.num_clbits for c in circuits)
+    big = QuantumCircuit(nq, name="packed")
+    creg = ClassicalRegister(nc, "m")
+    big.add_register(creg)
+    layout, q0, c0 = [], 0, 0
+    for c in circuits:
+        big.compose(c, qubits=range(q0, q0 + c.num_qubits), clbits=range(c0, c0 + c.num_clbits), inplace=True)
+        layout.append((c.name, c0, c.num_clbits))
+        q0, c0 = q0 + c.num_qubits, c0 + c.num_clbits
+    return big, layout
+
+
+def unpack(counts: dict[str, int], layout: list[tuple[str, int, int]]) -> dict[str, dict[str, int]]:
+    """Split packed counts into per-circuit counts (keys keep Qiskit bit order)."""
+    out: dict[str, dict[str, int]] = {name: {} for name, _, _ in layout}
+    for key, v in counts.items():
+        bits = key.replace(" ", "")[::-1]  # bits[i] = clbit i
+        for name, off, n in layout:
+            sub = bits[off:off + n][::-1]
+            out[name][sub] = out[name].get(sub, 0) + int(v)
+    return out
+
+
+def ionq_pack_probe(backend: Any, group: str = "link_readout", shots: int = 100) -> dict[str, Any]:
+    """Send ONE packed circuit (one level) as a single ionq.circuit.v1 job."""
+    shots = int(shots)
+    out: dict[str, Any] = {"ok": False, "group": group, "shots": shots, "backend": getattr(backend, "name", "?")}
+    t0 = time.time()
+    stage = "build"
+    try:
+        from quantum import batch, execute
+        qcs, _ = batch.build_full_batch()
+        sel = [q for q in qcs if q.name.startswith(PACK_GROUPS[group])]
+        compiled = execute.compile_for(backend, sel)
+        big, layout = pack(compiled)
+        out.update(qubits=big.num_qubits, clbits=big.num_clbits, subcircuits=[n for n, _, _ in layout],
+                   two_qubit_gates=sum(v for k, v in big.count_ops().items() if k in ("cx", "cz", "ms", "zz")))
+        stage = "submit"
+        job = backend.run(big, shots=shots)
+        out["job_id"] = str(job.job_id())
+        stage = "result"
+        counts = dict(job.result().get_counts())
+        out["result_s"] = round(time.time() - t0, 3)
+        out["per_circuit"] = unpack(counts, layout)
+        out["ok"] = True
+    except BaseException as exc:  # noqa: BLE001 - report everything
+        out["stage"] = stage
+        out["error_type"] = f"{type(exc).__module__}.{type(exc).__name__}"
+        out["error"] = repr(exc)[:600]
+        out["traceback"] = traceback.format_exc()[-1500:]
+    out["elapsed_s"] = round(time.time() - t0, 3)
+    return out

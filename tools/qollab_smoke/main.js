@@ -98,6 +98,10 @@ async function main() {
   const shots = { shots: 300 };
 
   // IonQ submit probes: ONE job each, press Stop and Run between them.
+  // Packed probes: one level = ONE circuit (Qollab's IonQ proxy rejects multi-circuit jobs).
+  addButton('IonQ PACKED: link + readout (14 q)', pos(probe.ionq_pack_probe, 'link_readout', 100));
+  addButton('IonQ PACKED: teleport (15 q)', pos(probe.ionq_pack_probe, 'teleport', 100));
+  addButton('IonQ PACKED: qkd (18 q)', pos(probe.ionq_pack_probe, 'qkd', 100));
   addButton('IonQ probe: 1 raw Bell circuit', pos(probe.ionq_probe, 0, 100));
   addButton('IonQ probe: first 1 batch circuit', pos(probe.ionq_probe, 1, 100));
   addButton('IonQ probe: first 10 batch circuits', pos(probe.ionq_probe, 10, 100));
