@@ -10,6 +10,9 @@
   same F (checked with exact density matrices). The "entanglement budget" bar shows the tangle
   C_AB^2 for Alice-Bob; the rest, 1 - C_AB^2, is NOT pairwise Bob-third entanglement (that is 0
   for the spy) but three-way correlation with the third qubit (CKW monogamy, A's total tangle = 1).
+  Sources: Werner, PRA 40, 4277 (1989); CHSH, PRL 23, 880 (1969); concurrence, Wootters,
+  PRL 80, 2245 (1998); monogamy (CKW), Coffman, Kundu & Wootters, PRA 61, 052306 (2000);
+  QBER/E91, Ekert, PRL 67, 661 (1991). Full list in README > References & credits.
   Measured points come from api.run_level 'noise' (Fs=[F]) and 'qkd' (theta_deg) through the
   same bridge as every level; they are drawn as dots with 95 % CI bands over the theory lines.
   Backend text is only ever inserted with textContent.

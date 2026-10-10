@@ -135,3 +135,7 @@ GET de fuentes (Google Fonts) y, solo en `dev/`, el CDN de three.js.
 - **Autorun**: tras arrancar, `main.js` ejecuta solo el primer nivel (link) con sus valores por defecto en cualquier backend (en IonQ usa el único trabajo del Run).
 - **Capítulo 'leak'** (id `leak`, tras `noise`): solo JS + `run_level` existente (`noise` con `Fs=[F]`, `qkd` con `theta_deg`); en IonQ solo el primero va en vivo y el otro se muestra grabado (puntos huecos).
 - La intro se abre al cargar (sin almacenamiento, siempre); botón **Intro** para reabrirla.
+
+## Fuentes y créditos
+
+Datos del mapa, librerías, fuentes tipográficas, referencias científicas y la declaración de IA están en `README.md` (secciones "Prior work & AI disclosure" y "References & credits"). Estado y pendientes: `docs/ESTADO.md`.
