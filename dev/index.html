@@ -49,14 +49,16 @@
   </div>
 
   <!-- "Noise is someone listening": dial, diagrams, charts (chapter 'leak') -->
-  <section id="leak-view" class="leak" aria-label="Noise is someone listening" hidden></section>
+  <section id="leak-view" class="leak" aria-label="Noise is someone listening" data-i18n-aria="level.leak.title" hidden></section>
 
   <!-- Intro tour (dismissible; never blocks the autorun) -->
   <div id="tour" class="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" hidden>
     <h2 id="tour-title" class="tour__title" data-i18n="tour.title">Build Colombia's first quantum internet, one Bell pair at a time</h2>
-    <p id="tour-step" class="tour__step"></p>
-    <h3 id="tour-step-title" class="tour__step-title"></h3>
-    <p id="tour-text" class="tour__text" aria-live="polite"></p>
+    <div class="tour__live" aria-live="polite" aria-atomic="true">
+      <p id="tour-step" class="tour__step"></p>
+      <h3 id="tour-step-title" class="tour__step-title"></h3>
+      <p id="tour-text" class="tour__text"></p>
+    </div>
     <div id="tour-dots" class="tour__dots" aria-hidden="true"></div>
     <div class="tour__actions">
       <button id="tour-skip" class="btn btn--small" type="button" data-i18n="tour.skip">Skip</button>
@@ -101,7 +103,7 @@
     <section id="cities-section" class="panel__section" aria-labelledby="cities-title">
       <h2 id="cities-title" class="field__label field__label--heading" data-i18n="cities.title">Cities (QPU nodes)</h2>
       <div id="city-list" class="city-list" role="group" data-i18n-aria="cities.aria" aria-label="Cities of the network"></div>
-      <div id="city-info" class="city-info" aria-live="polite"><span class="city-info__hint" data-i18n="cities.hint">Select a city to see its details.</span></div>
+      <div id="city-info" class="city-info"><span class="city-info__hint" data-i18n="cities.hint">Select a city to see its details.</span></div>
     </section>
 
     <div class="panel__footer">
@@ -119,11 +121,12 @@
     <!-- "What am I seeing?": plain-language explanation of the level -->
     <div id="explainer" class="explainer"></div>
 
-    <div id="results" class="results" aria-live="polite">
+    <div id="results" class="results">
       <p class="results__empty" data-i18n="results.empty">Pick a level and press Run.</p>
     </div>
     <div id="export-row" class="export-row" hidden>
-      <button id="export-btn" class="btn btn--small" type="button" data-i18n="export.btn" data-i18n-title="export.title" title="Save the result shown above as a JSON file in the console below the app">Export result</button>
+      <button id="export-btn" class="btn btn--small" type="button" data-i18n="export.btn" aria-describedby="export-hint">Export result</button>
+      <span id="export-hint" class="sr-only" data-i18n="export.title">Save the result shown above as a JSON file in the console below the app</span>
       <span id="export-status" class="export-status" role="status" aria-live="polite"></span>
     </div>
   </aside>

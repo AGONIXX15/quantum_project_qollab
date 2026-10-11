@@ -121,6 +121,7 @@ export class NetworkScene {
     this.reducedMotion = !!this._motionQuery?.matches;
     this._motionQuery?.addEventListener?.("change", (e) => {
       this.reducedMotion = e.matches;
+      if (this.controls) this.controls.enableDamping = !e.matches;
     });
 
     this._initRenderer();
@@ -168,7 +169,7 @@ export class NetworkScene {
     this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 200);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
+    this.controls.enableDamping = !this.reducedMotion;
     this.controls.dampingFactor = 0.07;
     this.controls.minDistance = 3.5;
     this.controls.maxDistance = 30;

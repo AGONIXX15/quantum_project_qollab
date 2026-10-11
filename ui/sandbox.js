@@ -90,9 +90,11 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
   let limits = { ...DEFAULT_LIMITS };
   let presets = BUILTIN_PRESETS.map((p) => ({ ...p }));
   let busy = false;
+  let busyKey = null;
   let mounted = false;
   let msg = null; // { key, vars, kind }
   let edited = false; // the user changed the graph: a late Python example must not overwrite it
+  const coordBad = { lat: false, lon: false };
   const draft = { city: "", from: "", to: "", F: 0.95, lat: "", lon: "", shots: null };
 
   const state = { nodes: [], links: [], src: null, dst: null, pick: false };
@@ -221,8 +223,19 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
 
   // --- form -----------------------------------------------------------------------
   let msgEl = null;
+  let liveEl = null;
+  function ensureLive() {
+    if (liveEl) return;
+    liveEl = el("p", "sr-only");
+    liveEl.setAttribute("role", "status");
+    liveEl.setAttribute("aria-live", "polite");
+    container.after(liveEl); // outside the re-rendered fieldset
+  }
   function paintMsg() {
+    ensureLive();
     if (!msgEl) return;
+    const text = msg ? t(msg.key, msg.vars) : "";
+    if (liveEl && liveEl.textContent !== text) liveEl.textContent = text; // ONE persistent region, only its text changes
     msgEl.className = "sb__msg" + (msg?.kind === "error" ? " sb__msg--error" : "");
     if (!msg) return void msgEl.replaceChildren();
     setIconText(msgEl, msg.kind === "error" ? "warn" : "info", t(msg.key, msg.vars), 13);
@@ -283,6 +296,21 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
     return g;
   }
 
+  // aria-invalid on the offending lat/lon inputs (message linked through aria-describedby="sb-msg").
+  function markCoords() {
+    const lat = draft.lat === "" ? NaN : Number(draft.lat), lon = draft.lon === "" ? NaN : Number(draft.lon);
+    const bad = {
+      lat: !Number.isFinite(lat) || lat < BBOX.south + MARGIN_DEG || lat > BBOX.north - MARGIN_DEG,
+      lon: !Number.isFinite(lon) || lon < BBOX.west + MARGIN_DEG || lon > BBOX.east - MARGIN_DEG,
+    };
+    if (!bad.lat && !bad.lon && Number.isFinite(lat) && Number.isFinite(lon) && !checkPoint(lat, lon).ok) bad.lat = bad.lon = true; // e.g. sea
+    for (const k of ["lat", "lon"]) {
+      coordBad[k] = bad[k];
+      const inp = container.querySelector(`[data-sb="${k}"]`);
+      if (inp) bad[k] ? inp.setAttribute("aria-invalid", "true") : inp.removeAttribute("aria-invalid");
+    }
+  }
+
   function buildPointGroup() {
     const g = el("div", "sb__group");
     const pick = el("button", "btn btn--small sb__toggle", t("sandbox.pick"));
@@ -305,7 +333,15 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
       i.placeholder = ph;
       i.value = draft[key];
       i.dataset.sb = key;
-      i.addEventListener("input", () => { draft[key] = i.value; });
+      i.min = String(key === "lat" ? BBOX.south + MARGIN_DEG : BBOX.west + MARGIN_DEG);
+      i.max = String(key === "lat" ? BBOX.north - MARGIN_DEG : BBOX.east - MARGIN_DEG);
+      i.setAttribute("aria-describedby", "sb-msg");
+      if (coordBad[key]) i.setAttribute("aria-invalid", "true");
+      i.addEventListener("input", () => {
+        draft[key] = i.value;
+        coordBad[key] = false;
+        i.removeAttribute("aria-invalid");
+      });
       f.appendChild(i);
       return f;
     };
@@ -314,6 +350,7 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
     add.type = "button";
     add.dataset.sb = "add-point";
     add.addEventListener("click", () => {
+      markCoords();
       if (draft.lat === "" || draft.lon === "") return setMsg("sandbox.msg.bad_coords", {}, "error");
       addPoint(Number(draft.lat), Number(draft.lon));
     });
@@ -444,8 +481,7 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
     fs.setAttribute("aria-label", t("sandbox.aria"));
     fs.append(buildCityGroup(), buildPointGroup(), buildNodeList(), buildLinkBuilder(), buildRouteGroup());
     msgEl = el("p", "sb__msg");
-    msgEl.setAttribute("role", "status");
-    msgEl.setAttribute("aria-live", "polite");
+    msgEl.id = "sb-msg"; // referenced by the lat/lon inputs; announcements go through the persistent live region
     fs.appendChild(msgEl);
     container.replaceChildren(fs);
     paintMsg();
@@ -470,6 +506,7 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
       }
       msg = null;
       msgEl = null;
+      if (liveEl) liveEl.textContent = "";
     },
     render,
     graph,
@@ -482,7 +519,15 @@ export function createSandboxView(container, { getScene, onChange, onNotice } = 
     setBusy(b) {
       busy = !!b;
       const fs = container.querySelector("fieldset.sb");
-      if (fs) fs.disabled = busy;
+      if (!fs) return;
+      // A disabled fieldset drops the focus to <body>: remember the control and give it back afterwards.
+      if (busy) busyKey = container.contains(document.activeElement) ? document.activeElement?.dataset?.sb ?? null : null;
+      fs.disabled = busy;
+      if (!busy && busyKey) {
+        const a = document.activeElement;
+        if (!a || a === document.body) container.querySelector(`[data-sb="${CSS.escape(busyKey)}"]`)?.focus({ preventScroll: true });
+        busyKey = null;
+      }
     },
     // Limits from api.info().sandbox (field names read defensively; defaults mirror the Python side).
     setLimits(l) {

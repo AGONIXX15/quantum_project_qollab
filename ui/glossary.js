@@ -63,7 +63,12 @@ function wire() {
   wired = true;
   const termOf = (e) => e.target?.closest?.(".term[data-term]");
   document.addEventListener("mouseover", (e) => { const x = termOf(e); if (x) show(x); });
-  document.addEventListener("mouseout", (e) => { if (termOf(e) && !termOf({ target: e.relatedTarget })) hide(); });
+  const inPop = (n) => !!(n && pop && pop.contains(n));
+  // The tooltip is hoverable (WCAG 1.4.13): leaving the term for the pop, or the pop for the term, keeps it open.
+  document.addEventListener("mouseout", (e) => {
+    const from = termOf(e) || inPop(e.target);
+    if (from && !termOf({ target: e.relatedTarget }) && !inPop(e.relatedTarget)) hide();
+  });
   document.addEventListener("focusin", (e) => { const x = termOf(e); if (x) show(x); });
   document.addEventListener("focusout", (e) => { if (termOf(e)) hide(); });
   document.addEventListener("keydown", (e) => {
@@ -90,6 +95,7 @@ export function decorate(root) {
       const span = document.createElement("span");
       span.className = "term";
       span.tabIndex = 0;
+      span.setAttribute("role", "button");
       span.dataset.term = id;
       span.textContent = after.nodeValue;
       after.replaceWith(span);

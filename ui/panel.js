@@ -135,6 +135,9 @@ function buildControl(name, spec) {
   }
   const inp = document.createElement("input");
   inp.type = "number";
+  if (spec?.min !== undefined) inp.min = spec.min;
+  if (spec?.max !== undefined) inp.max = spec.max;
+  inp.step = spec?.step ?? (spec?.type === "int" || Number.isInteger(spec?.default) ? 1 : "any");
   inp.value = spec?.default ?? 0;
   inp.dataset.param = name;
   inp.dataset.kind = "num";
@@ -165,7 +168,14 @@ function buildPurifyChannel(params) {
         inp.dataset.kind = "numlist";
         inp.dataset.i18nAria = "param.p";
         inp.setAttribute("aria-label", t("param.p"));
-        return inp;
+        inp.id = nextId("p-list");
+        const hint = el("p", "field__note", t("param.p.hint"));
+        hint.id = `${inp.id}-hint`;
+        hint.dataset.i18n = "param.p.hint";
+        inp.setAttribute("aria-describedby", hint.id);
+        const wrap = el("div", "channel__control");
+        wrap.append(inp, hint);
+        return wrap;
       },
     },
   ];

@@ -109,15 +109,26 @@ function renderStatus() {
   els.runSecs.textContent = state === "running" ? ` · ${secs} s` : "";
 }
 
+let wasBusy = false;
+let busyFocus = null;
 function setState(state, secs = 0, note = null) {
   status = { state, secs, note: state === "running" ? note : null };
   renderStatus();
   const busy = state === "running";
+  // Disabling the focused Run button / level select drops focus to <body>: remember it and restore it afterwards.
+  if (busy && !wasBusy) busyFocus = [els.runBtn, els.levelSelect].find((e) => e === document.activeElement) ?? null;
   els.runBtn.disabled = busy;
   els.levelSelect.disabled = busy;
   els.exportBtn.disabled = busy;
   sandboxView.setBusy(busy);
   els.results.setAttribute("aria-busy", String(busy));
+  if (!busy && wasBusy && busyFocus) {
+    const target = busyFocus;
+    busyFocus = null;
+    const a = document.activeElement;
+    if ((!a || a === document.body) && !target.disabled) target.focus({ preventScroll: true });
+  }
+  wasBusy = busy;
 }
 
 // --- language ----------------------------------------------------------------
@@ -511,6 +522,7 @@ els.exportBtn.addEventListener("click", async () => {
   const vis = shown && visibleResult(shown.result);
   if (!vis || status.state === "running" || bridge.isBusy()) return;
   const filename = `entangle-${slug(shown.levelId)}-${slug(vis.backend ?? bridge.backendName())}.json`;
+  const hadFocus = document.activeElement === els.exportBtn;
   els.exportBtn.disabled = true;
   try {
     const res = await bridge.exportResult(vis, filename);
@@ -521,6 +533,7 @@ els.exportBtn.addEventListener("click", async () => {
     els.exportStatus.textContent = t("export.failed", { error: String(err?.message ?? err) });
   } finally {
     els.exportBtn.disabled = status.state === "running";
+    if (hadFocus && !els.exportBtn.disabled && (!document.activeElement || document.activeElement === document.body)) els.exportBtn.focus({ preventScroll: true });
   }
 });
 
