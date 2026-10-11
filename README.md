@@ -21,7 +21,7 @@ is falling apart.
 
 Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · Colombia node.
 
-**Demo video (2–3 min):** https://youtu.be/imjGHrXFxu4
+**Demo video (2–3 min):** https://youtu.be/VP3toPuXmok
 
 ## Beyond the tutorial: what is new here
 
