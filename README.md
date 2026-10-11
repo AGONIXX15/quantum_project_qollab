@@ -1,5 +1,7 @@
 # Entangle the Andes
 
+![Entangle the Andes: the 3D map of Colombia with the Bogotá–Medellín–Cali quantum network. The Bogotá–Cali link is damaged, and the results panel recommends rerouting through Medellín, based on live circuit results.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/cover.jpg)
+
 **Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Bell pair at a time.**
 
 Entangle the Andes is a game-like lab for quantum networking. You play on a 3D map of Colombia,
@@ -12,6 +14,10 @@ is falling apart.
 > pair is leaking into the outside world. A spy works the same way: information about the pair
 > leaks to the spy. Entanglement is *monogamous*: the more a third party is correlated with
 > Bob, the less Alice can be. The app makes this one mechanism visible, with one dial.
+
+![Two panels against the spy angle θ. Left: the Bell-pair fidelity falls the same way for a spy and for environmental noise, while the error rates differ (the spy leaves the Z basis untouched). Right: CHSH S for the spy and for the environment, with the classical bound S = 2. The measured point at θ = 120° lies on the spy curve.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/noise_is_someone_listening.png)
+
+*Theory curves from the formulas in the app (`ui/leak.js`). The dots are measured circuit results at θ = 120° (Built-in simulator, 1000 shots, 95 % CI). The fidelity is the same, but the fingerprint differs: the spy breaks CHSH later (131.1°) than environmental noise of the same fidelity (111.8°).*
 
 Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · Colombia node.
 
@@ -54,6 +60,10 @@ $U\in\{I,H,S,HS,SH,HSH\}$, from the measured noise. Under amplitude damping, the
 DEJMPS round does not purify (0.90 → 0.89 in the run below), and the adaptive round does
 (0.90 → 0.98).
 
+![Bar chart: input pair F = 0.900, textbook DEJMPS F = 0.890, adaptive DEJMPS (U = SH) F = 0.980, each with a 95 % CI and the exact theory value.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/purification_adaptive.png)
+
+*Amplitude damping γ = 0.2, environment qubits in the circuit, Built-in simulator, 1000 shots. The y axis starts at 0.80. The adaptive round costs more raw pairs per output (2.44 vs 2.21) but is the only one that improves the pair.*
+
 ## How it works
 
 ```
@@ -71,6 +81,11 @@ DEJMPS round does not purify (0.90 → 0.89 in the run below), and the adaptive 
   added by a black-box simulator. The environment starts in
   $\sqrt F|00\rangle + \sqrt{\tfrac{1-F}{3}}(|01\rangle+|10\rangle+|11\rangle)$ and then acts on Bob
   through CX and CZ, giving an exact Werner state. The same picture gives the spy.
+  Teleportation (chapter 2) always uses environment qubits. Chapters 3, 5, 6 and 8 offer two modes. *Teaching* puts the environment qubits inside the circuit, as
+  described above. *Precision* runs the ideal circuit and applies the same Pauli channel to the
+  measured bits in Python, which isolates the configured noise from hardware noise. The recorded
+  results below use precision for chapters 3, 5 and 8, and teaching for distillation (damping is
+  not a Pauli channel).
 - **Statistics on every number.** $\langle PP\rangle = 1-2q$ with variance $4q(1-q)/N$. Every
   metric shows its value, a Wilson / normal 95 % interval, the theoretical value, the backend,
   the shot count and the timestamp.
@@ -124,6 +139,10 @@ whenever a live run is not possible). Each value is shown with its 95 % confiden
 | | CHSH S (standard / device-informed angles) | 2.20 / 2.24 | 2.12 / 2.23 |
 | | Key rate: Shor–Preskill / biased bases | 0 / 0.17 | 0 / 0.19 |
 | Save the network (BOG–CAL damaged to F = 0.7, target 0.85) | Direct / reroute via Medellín | F 0.70 (no key) / **0.91** (key 0.18 per raw pair) | 0.70 / 0.90 |
+
+![Measured vs theory for every chapter, with 95 % CIs. Chapter 1 also shows the real IonQ Forte 1 result.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/results_vs_theory.png)
+
+*Generated from `data/recorded/*.json` by `tools/make_figures.py` (in the source repository).*
 
 Every measured value agrees with theory within its 95 % interval, apart from statistical
 fluctuation at the 1–2σ level.
