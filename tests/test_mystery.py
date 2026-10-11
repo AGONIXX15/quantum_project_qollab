@@ -211,3 +211,15 @@ def test_ionq_submit_error_releases_job():
     assert api.mystery(be, 2, 100)["ok"] is False
     be.run = orig
     assert api.mystery(be, 2, 100)["ok"]
+
+
+def test_js_null_seed_is_treated_as_none():
+    """Pyodide passes JS null as a JsNull object, not None: it must draw a fresh culprit."""
+    from qiskit.providers.basic_provider import BasicSimulator
+
+    from quantum import api
+
+    JsNull = type("JsNull", (), {})
+    res = api.mystery(BasicSimulator(), JsNull(), 200)
+    assert res["ok"] is True
+    assert res["truth"]["kind"] in ("noise", "spy")

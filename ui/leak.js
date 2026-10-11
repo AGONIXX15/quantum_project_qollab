@@ -581,7 +581,9 @@ export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, 
       out.anyFailed = true;
       state.my = { phase: "failed" };
       const msg = res.code === "ionq_job_used" ? t("mystery.ionq_used") : res.code === "ionq_too_wide" ? t("mystery.too_wide")
-        : res.code === "previous_pending" ? t("leak.pending") : res.error === "timeout" ? t("mystery.timeout") : t("mystery.fail");
+        : res.code === "previous_pending" ? t("leak.pending") : res.error === "timeout" ? t("mystery.timeout")
+        : `${t("mystery.fail")}${res?.error ? ` (${String(res.error).slice(0, 160)})` : res?.ok ? " (unexpected result shape)" : ""}`;
+      console.warn("[mystery] failed", res?.ok, res?.code, res?.error);
       if (res.code === "previous_pending") { out.anyFailed = false; out.busy = true; }
       setMysStatus(msg, "warn");
     }

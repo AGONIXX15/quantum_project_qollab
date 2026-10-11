@@ -164,7 +164,8 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   // reveal the culprit (truth, seed, circuits, counts, theory values, detector) stays in a closure,
   // handed over only by res.reveal().
   async function runMystery(shots = 1000, hooks, seed = null) {
-    const res = await callApi(api.mystery, [seed, shots], hooks);
+    // JS null would reach Python as JsNull; undefined becomes None.
+    const res = await callApi(api.mystery, [seed ?? undefined, shots], hooks);
     if (!res || res.ok !== true) return res; // failures carry no truth (needed_qubits is the same for both kinds)
     const { truth, detector, params, circuits, counts, viz, metrics, ...rest } = res;
     const pub = {};

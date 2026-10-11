@@ -394,6 +394,9 @@ def mystery(backend: Any, seed: Any = None, shots: int = 1000) -> dict[str, Any]
     IonQ: ONE packed circuit in the Run's single job (the same request again is served
     from the cache, anything else gets ``ionq_job_used``).
     """
+    # Pyodide maps JS null to JsNull (not None): treat it as "no seed".
+    if type(seed).__name__ == "JsNull":
+        seed = None
     raw_seed = None if seed is None else int(_num("seed", seed, 0, _mystery.MAX_SEED))
     n = _shots(shots)
     use = _mystery.draw_seed() if raw_seed is None else raw_seed
