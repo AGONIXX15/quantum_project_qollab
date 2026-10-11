@@ -21,6 +21,24 @@ is falling apart.
 
 Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · Colombia node.
 
+## Beyond the tutorial: what is new here
+
+1. **One mechanism for noise and eavesdropping.** The environment and the spy are both a
+   third qubit that gets correlated with Bob (a Stinespring dilation). The same circuit
+   family gives Werner noise and an intercept attack, so learners can see that they cost the
+   same fidelity but leave different fingerprints (QBER per basis, where CHSH breaks).
+2. **Adaptive purification that works where the textbook protocol fails.** Under amplitude
+   damping, standard DEJMPS does not improve the pair (0.900 → 0.890 in our run). Choosing a
+   local twist $U\otimes U^*$ from measured XX/YY/ZZ correlators does (→ 0.980).
+3. **Your own network, run as real circuits.** In chapter 9 you place cities on the map, wire
+   links and pick two endpoints. The app chooses the best route and runs a real N-hop
+   entanglement-swapping chain, with the Pauli frame applied over every intermediate Bell
+   measurement.
+4. **IonQ-ready by construction.** Measurement happens only at the end, and corrections are
+   applied as a classical Pauli frame. Each chapter is packed into **one circuit for one job**
+   (`quantum/pack.py`, reusable in any project). Chapter 1 was also run on the real IonQ
+   Forte 1 QPU.
+
 ## Why it matters
 
 Quantum networks are the next step after single quantum computers. They can send qubits
@@ -34,12 +52,12 @@ Entangle the Andes turns them into something you can run and break yourself:
 
 - **Learners** see each building block of a quantum network as a circuit they can run, with
   the theory beside the measurement.
-- **Teachers** get 8 self-contained chapters, in English and Spanish, that run in the browser
+- **Teachers** get 9 self-contained chapters, in English and Spanish, that run in the browser
   with no installation.
 - **Developers** can fork the Python modules. Each protocol is a small, tested, documented
   `build_*` / `decode_*` pair.
 
-## What you can do (8 chapters)
+## What you can do (9 chapters)
 
 | # | Chapter | Circuit | What you measure | Theory it is checked against |
 |---|---|---|---|---|
@@ -51,6 +69,7 @@ Entangle the Andes turns them into something you can run and break yourself:
 | 6 | **Distillation** | DEJMPS, fixed vs **adaptive** | Success probability and output fidelity | $p_s$ and $F'$ (DEJMPS) |
 | 7 | **Catch the spy** | E91/BBM92 + 1 spy qubit | QBER per basis, CHSH S, key rate | $S=\sqrt2(1+\cos\tfrac\theta2)$, $Q_X=\tfrac{1-\cos(\theta/2)}{2}$ |
 | 8 | **Save the Quantum Network** | Capstone: a link breaks | Direct vs reroute vs purify, pairs used and key | Picks the cheapest strategy that reaches the target |
+| 9 | **Build your own network** | Sandbox: your cities, links and fidelities | End-to-end F of the best route, fibre loss, raw pairs, key rate | $N$-hop swapping: Bell-diagonal convolution of the links |
 
 The spy entangles itself with Bob's qubit through a controlled rotation $CR_Y(\theta)$. At
 $\theta = 0$ nobody is listening. At $\theta=\pi$ the spy intercepts everything: the average
@@ -63,6 +82,12 @@ DEJMPS round does not purify (0.90 → 0.89 in the run below), and the adaptive 
 ![Bar chart: input pair F = 0.900, textbook DEJMPS F = 0.890, adaptive DEJMPS (U = SH) F = 0.980, each with a 95 % CI and the exact theory value.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/purification_adaptive.png)
 
 *Amplitude damping γ = 0.2, environment qubits in the circuit, Built-in simulator, 1000 shots. The y axis starts at 0.80. The adaptive round costs more raw pairs per output (2.44 vs 2.21) but is the only one that improves the pair.*
+
+![Chapter 9: a user-built network of seven links between Quito, Cali, Medellín, Bogotá, Cartagena and Caracas. The app chose the 4-hop route Quito–Cali–Medellín–Bogotá–Caracas and ran it as a real swapping circuit; the panel lists the alternative routes and the measured correlators against theory.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/sandbox.jpg)
+
+*Chapter 9 on the Built-in simulator. The chosen route has a theory fidelity of 0.778, against
+0.756 and 0.642 for the alternatives. The fibre-loss numbers (η ≈ 10⁻²⁷ over 2,654 km with no
+intermediate repeaters) show why real networks need repeaters every few tens of kilometres.*
 
 ## How it works
 
@@ -161,17 +186,18 @@ live (~13 s); press Stop → Run to run another one.
 
 ```bash
 uv sync            # Python 3.14, Qiskit 2.5.2, qiskit-ionq 1.0.2 (same versions as Qollab)
-uv run pytest      # 251 tests, BasicSimulator with fixed seeds
+uv run pytest      # 290 tests, BasicSimulator with fixed seeds
 python3 -m http.server 8123   # then open http://localhost:8123/dev/index.html (UI with mock data)
 ```
 
 ## Testing
 
-251 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
+290 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
 teleportation of 6 states; Werner noise at F = 0.6 / 0.8 / 0.95 within the confidence interval;
 the swapping and DEJMPS formulas; ideal CHSH within 3σ of $2\sqrt2$; full interception giving
 QBER ≈ 25 % and S ≈ √2; a structural check that **no circuit measures before the end**; bit
-order; and a fake IonQ backend that asserts **one `run` call with one packed circuit per Run**.
+order; a fake IonQ backend that asserts **one `run` call with one packed circuit per Run**; and the
+chapter 9 chain checked against the swapping formula for 1, 2 and 5 hops.
 
 ## How to extend it
 
@@ -195,6 +221,7 @@ order; and a fake IonQ backend that asserts **one `run` call with one packed cir
 | `quantum/purify.py` | DEJMPS, fixed and adaptive |
 | `quantum/qkd.py` | E91/BBM92, spy, CHSH, key rates |
 | `quantum/rescue.py` | Capstone strategy search |
+| `quantum/sandbox.py` | Chapter 9: graph validation, route choice, N-hop swapping chain |
 | `quantum/analysis.py` | Correlators, confidence intervals, key rates |
 | `quantum/batch.py`, `pack.py`, `execute.py` | Batching, IonQ packing, backend handling |
 | `quantum/geo.py` | Cities, fibre lengths, loss |
@@ -216,6 +243,10 @@ order; and a fake IonQ backend that asserts **one `run` call with one packed cir
 - Real hardware covers only chapter 1, from a single run of 1000 shots. Our readout mitigation
   assumes the identity logical-to-physical qubit mapping and does not propagate calibration
   uncertainty, so the mitigated value is indicative.
+- Chapter 9 treats each link as a single fibre span between two cities. Noise is a Werner
+  channel per link, applied in precision mode. "Raw pairs per delivered pair" is the number of
+  pairs generated while waiting for the slowest link (hops / η_min, ideal memories). The app
+  runs at most 6 hops on simulators and 4 on IonQ.
 - Nothing here claims a quantum advantage. The goal is understanding.
 
 ## Prior work & AI disclosure
