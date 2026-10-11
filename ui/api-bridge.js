@@ -151,6 +151,32 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return res;
   }
 
+  // api.sandbox(backend, graph, shots, seed): chapter 9. Same busy/stale/timeout handling as runLevel.
+  // graph = {nodes:[{id,name,lat,lon}], links:[{a,b,F}], src, dst}. No recorded fallback exists.
+  async function runSandbox(graph, shots = 1000, hooks, seed = 0) {
+    return callApi(api.sandbox, [graph, shots, seed], hooks);
+  }
+
+  // api.sandbox_presets(): no backend argument. Returns {cities, example, bbox} or null on any failure
+  // (the UI has a built-in list).
+  async function sandboxPresets() {
+    try {
+      const call = api.sandbox_presets.callPromising();
+      const { done, wasTimeout } = withTimeout(call);
+      try {
+        const res = plain(await done);
+        if (res?.ok === false) return null;
+        const cities = Array.isArray(res?.cities) ? res.cities : Array.isArray(res?.presets) ? res.presets : null;
+        return cities ? { ...res, cities } : null;
+      } catch (err) {
+        if (wasTimeout()) call.then((p) => p?.destroy?.(), () => {});
+        throw err;
+      }
+    } catch {
+      return null;
+    }
+  }
+
   // api.export_result(result, filename): no backend argument (it only downloads a file).
   async function exportResult(result, filename) {
     try {
@@ -170,5 +196,5 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     }
   }
 
-  return { info, callApi, runLevel, exportResult, loadRecorded, backendName, isBusy: () => busy || latePending };
+  return { info, callApi, runLevel, runSandbox, sandboxPresets, exportResult, loadRecorded, backendName, isBusy: () => busy || latePending };
 }

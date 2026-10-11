@@ -323,6 +323,9 @@ export function readParams(formEl) {
 function fmtMetric(v) {
   if (v === null || v === undefined) return "—";
   if (typeof v !== "number") return String(v);
+  // Very small / very large numbers (eta of long fibres, raw pairs per delivered pair): scientific.
+  if (Math.abs(v) < 1e-9) return (0).toFixed(3); // numerical noise (e.g. -1e-17 CI bounds) reads as 0.000
+  if (v !== 0 && (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e5)) return v.toExponential(2);
   if (Math.abs(v) >= 100) return v.toFixed(1);
   return v.toFixed(3);
 }

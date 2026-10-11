@@ -51,7 +51,7 @@ from typing import Any, Callable
 
 from . import analysis as an
 from . import validate as V
-from . import batch, geo, links, noise, purify, qkd, swap, teleport
+from . import batch, geo, links, noise, purify, qkd, sandbox as _sandbox, swap, teleport
 from . import pack as _pack
 from . import rescue as _rescue
 
@@ -223,6 +223,7 @@ def info() -> dict[str, Any]:
         },
         "decode_only": {"function": "decode_only", "levels": list(batch.DECODED_LEVELS)},
         "geo": geo.geo_info(),
+        "sandbox": _sandbox.sandbox_info(),
     }
 
 
@@ -338,6 +339,53 @@ def rescue(
                 "damage_theta_deg": damage_theta_deg, "healthy_F": healthy_F, "target_F": target_F, "mode": mode}
         return _ionq_level(backend, "rescue", shots, seed, _batch_params("rescue", flat))
     return _rescue.run_rescue(backend, *args)
+
+
+@_guard(ionq_ok=True)
+def sandbox(backend: Any, graph: Any, shots: int = 1000, seed: int = 0) -> dict[str, Any]:
+    """Sandbox: run the best route of a user-built network (see ``quantum.sandbox``).
+
+    ``graph`` = ``{"nodes": [{id, name, lat, lon}], "links": [{a, b, F}], "src", "dst"}``.
+    Not part of ``RUN_LEVELS`` / ``full_batch``. Simulators: one ``backend.run`` with 3
+    circuits. IonQ: ONE packed circuit in the Run's single job (the same request again is
+    served from the cache, a different one gets ``ionq_job_used``); a network whose shortest
+    route does not fit the width gets ``ionq_too_wide`` without spending the job.
+    """
+    clean = _sandbox.validate_graph(graph)
+    n = _shots(shots)
+    seed = int(seed)
+    if not an.is_ionq(backend):
+        try:
+            return _sandbox.run_sandbox(backend, clean, n, seed)
+        except _pack.DoesNotFit as exc:
+            raise V.InputError(f"no route fits: the shortest route has more than "
+                               f"{_sandbox.MAX_HOPS_SIM} hops") from exc
+    state = _ionq_state(backend)
+    key = json.dumps([clean, n, seed], sort_keys=True)
+    cache = state["cache"]
+    if cache and "sandbox" in cache["levels"]:
+        if cache.get("sandbox_key") == key:
+            return {**cache["levels"]["sandbox"], "cached_run": True}
+        return _ionq_used(state)
+    if state["used"]:
+        return _ionq_used(state)
+    try:
+        res = _sandbox.run_sandbox(backend, clean, n, seed,
+                                   before_run=lambda: state.update(used=True),
+                                   on_submit_error=lambda: state.update(used=False))
+    except _pack.DoesNotFit as exc:
+        return {"ok": False, "code": IONQ_WIDE_CODE, "error": f"sandbox {exc}",
+                "needed_qubits": exc.needed, "max_qubits": exc.cap}
+    out = {"ok": True, "source": "ionq_packed", "cached_run": False, **an.to_plain(res)}
+    state["cache"] = {"backend": res["backend"], "timestamp": res["timestamp"], "shots": res["shots"],
+                      "levels": {"sandbox": out}, "sandbox_key": key}
+    return out
+
+
+@_guard(needs_backend=False)
+def sandbox_presets() -> dict[str, Any]:
+    """City presets (inside the map region) and an example graph for the sandbox."""
+    return _sandbox.sandbox_presets()
 
 
 def _ionq_level(backend: Any, level: str, shots: int | None, seed: int, params: dict[str, Any]) -> dict[str, Any]:

@@ -145,3 +145,15 @@ def geo_info() -> dict[str, Any]:
                     "loss lowers the pair rate, not the fidelity",
         },
     }
+
+
+def haversine_coords(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km between two (lat, lon) points in degrees.
+
+    Same formula and radius as ``haversine_km``, for arbitrary coordinates.
+    """
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = p2 - p1
+    dlam = math.radians(lon2 - lon1)
+    h = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlam / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(min(1.0, h)))

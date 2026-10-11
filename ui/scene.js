@@ -30,7 +30,7 @@ import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer
 
 import {
   BBOX, BORDERS, DEM, DEM_W, DEM_H, LON_SPAN, LAT_SPAN, EARTH_SIZE,
-  toScene, surfaceUnits, surfaceAt, curveDrop, CURVE, SEA_LEVEL, haversineKm, paintEarth, loadEarthImage, makeFadeCanvas,
+  toScene, fromScene, elevationM, surfaceUnits, surfaceAt, curveDrop, CURVE, SEA_LEVEL, haversineKm, paintEarth, loadEarthImage, makeFadeCanvas,
 } from "./terrain.js";
 import { icon, setIconText } from "./icons.js";
 import { t, onLangChange } from "./i18n.js";
@@ -111,8 +111,10 @@ export class NetworkScene {
     this.pointer = new THREE.Vector2();
     this.hoverHandlers = [];
     this._tween = null;
-    this._activeLinkId = null;
+    this._activeIds = new Set(); // links with the highlighted badge (one link, or a whole route)
     this._hoverLinkId = null;
+    this._main = null; // stash of the main network while the sandbox chapter is shown
+    this._pickCb = null;
 
     // prefers-reduced-motion: static render (no photon flow, waves, pulses or camera tween).
     this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -429,6 +431,7 @@ export class NetworkScene {
   _retext() {
     for (const g of this.geoLabels) g.el.textContent = t(g.key);
     for (const l of Object.values(this.links)) this._renderLinkLabel(l);
+    for (const l of Object.values(this._main?.links ?? {})) this._renderLinkLabel(l);
   }
 
   // --- Construction from the backend geography ------------------------------
@@ -514,7 +517,9 @@ export class NetworkScene {
     this.labelItems.push({ el, prio: 0 });
 
     this.scene.add(group);
-    this.cities[id] = { group, core, hit, pulse, pos, data: c, color };
+    const entry = { group, core, hit, pulse, pos, data: c, color, label };
+    this.cities[id] = entry;
+    return entry;
   }
 
   _buildLink(linkData) {
@@ -621,7 +626,8 @@ export class NetworkScene {
     const km = haversineKm(ca.data.lat, ca.data.lon, cb.data.lat, cb.data.lon);
     const entry = {
       id, tube, hit, src, srcRing, uniforms, curve, a: aId, b: bId, km, geo: linkData,
-      F: null, status: null, photons: null, el, fEl, sEl, kEl, leader,
+      F: null, status: null, photons: null, el, fEl, sEl, kEl, leader, label, dim: false, baseF: null,
+      objs: [tube, hit, src, label, leader],
     };
     this.links[id] = entry;
     this.labelItems.push({ el, link: entry });
@@ -643,7 +649,7 @@ export class NetworkScene {
     l.uniforms.width.value = KIND_WIDTH[kind];
     l.uniforms.dashed.value = kind === "broken" ? 1 : 0;
     const f = l.F ?? 0.8;
-    l.uniforms.intensity.value = 0.6 + 0.9 * f;
+    l.uniforms.intensity.value = (0.6 + 0.9 * f) * (l.dim ? 0.4 : 1);
     l.uniforms.flow.value = 0.4 + 1.0 * f;
     this._renderLinkLabel(l);
   }
@@ -746,11 +752,13 @@ export class NetworkScene {
   // Back to the neutral state before drawing a new result.
   resetLinks() {
     for (const link of Object.values(this.links)) {
-      link.F = null;
+      link.F = link.baseF; // null on the main network; the configured F of a sandbox link
       link.status = null;
+      link.dim = false;
+      link.el.classList.remove("link-label--route");
       this._applyKind(link);
     }
-    this._activeLinkId = null;
+    this._activeIds.clear();
     this._syncLinkActive();
   }
 
@@ -835,14 +843,151 @@ export class NetworkScene {
   }
 
   highlightLink(linkId) {
-    this._activeLinkId = linkId;
+    this._activeIds = new Set(linkId ? [linkId] : []);
     this._syncLinkActive();
   }
 
   _syncLinkActive() {
     for (const l of Object.values(this.links)) {
-      l.el.classList.toggle("is-active", l.id === this._activeLinkId || l.id === this._hoverLinkId);
+      l.el.classList.toggle("is-active", this._activeIds.has(l.id) || l.id === this._hoverLinkId);
     }
+  }
+
+  // --- Sandbox (chapter 9): user-built network drawn with the same node/link visuals ------
+  // While active, this.cities / this.links hold the SANDBOX objects (so hover, photons, states and
+  // camera helpers work unchanged) and the main network is stashed in this._main, hidden.
+  get sandboxActive() {
+    return !!this._main;
+  }
+
+  _enterSandbox() {
+    if (this._main) return;
+    this.clearPhotons();
+    this.resetLinks();
+    for (const c of Object.values(this.cities)) {
+      c.group.visible = false;
+      c.label.visible = false;
+    }
+    for (const l of Object.values(this.links)) for (const o of l.objs) o.visible = false;
+    this._main = { cities: this.cities, links: this.links };
+    this.cities = {};
+    this.links = {};
+    this._hoverLinkId = null;
+    this._hoveredKey = null;
+    for (const cb of this.hoverHandlers) cb(null); // hide any open tooltip
+    this._activeIds = new Set();
+  }
+
+  _disposeObject(o) {
+    o.traverse((c) => {
+      c.geometry?.dispose?.();
+      const m = c.material;
+      if (Array.isArray(m)) m.forEach((x) => x.dispose());
+      else m?.dispose?.();
+    });
+    this.scene.remove(o);
+  }
+
+  // Removes every sandbox object (geometry, material, HTML labels, label-collision entries).
+  _disposeSandboxObjects() {
+    const gone = new Set();
+    for (const c of Object.values(this.cities)) {
+      gone.add(c.label.element);
+      this._disposeObject(c.group);
+      c.label.element.remove();
+    }
+    for (const l of Object.values(this.links)) {
+      this._disposePhotons(l);
+      gone.add(l.el);
+      for (const o of l.objs) this._disposeObject(o);
+      l.el.remove();
+    }
+    this.cities = {};
+    this.links = {};
+    this.labelItems = this.labelItems.filter((it) => !gone.has(it.el));
+  }
+
+  // nodes: [{id, name, lat, lon}], links: [{a, b, F}]. Replaces the previous sandbox drawing.
+  setSandbox(nodes, links) {
+    this._enterSandbox();
+    this._disposeSandboxObjects();
+    for (const n of nodes) this._buildCity(n.id, { name: n.name, lat: n.lat, lon: n.lon, sandbox: true });
+    for (const l of links) {
+      const ca = this.cities[l.a], cb = this.cities[l.b];
+      if (!ca || !cb) continue;
+      const fibre = haversineKm(ca.data.lat, ca.data.lon, cb.data.lat, cb.data.lon) * 1.3; // info only
+      this._buildLink({ id: `${l.a}-${l.b}`, a: l.a, b: l.b, F: l.F, length_km: fibre, eta: 10 ** (-0.02 * fibre) });
+      const built = this.links[`${l.a}-${l.b}`];
+      if (!built) continue;
+      built.baseF = l.F;
+      built.F = l.F;
+      this._applyKind(built);
+    }
+    this._retext();
+  }
+
+  // Back to the main network: sandbox objects are disposed, the main ones shown again.
+  leaveSandbox() {
+    if (!this._main) return;
+    this.setPickMode(false);
+    this._disposeSandboxObjects();
+    this.cities = this._main.cities;
+    this.links = this._main.links;
+    this._main = null;
+    for (const c of Object.values(this.cities)) {
+      c.group.visible = true;
+      c.label.visible = true;
+    }
+    for (const l of Object.values(this.links)) for (const o of l.objs) o.visible = true;
+    this._hoverLinkId = null;
+    this._hoveredKey = null;
+    for (const cb of this.hoverHandlers) cb(null); // hide any open tooltip
+    this._activeIds = new Set();
+    this.resetLinks();
+  }
+
+  // id of the sandbox link between two nodes, in either orientation (or null).
+  findLinkId(a, b) {
+    if (this.links[`${a}-${b}`]) return `${a}-${b}`;
+    if (this.links[`${b}-${a}`]) return `${b}-${a}`;
+    return null;
+  }
+
+  // Highlights a route (badges) and dims the links that are not part of it.
+  emphasizeRoute(linkIds) {
+    const set = new Set(linkIds);
+    for (const l of Object.values(this.links)) {
+      l.dim = set.size > 0 && !set.has(l.id);
+      l.el.classList.toggle("link-label--route", set.has(l.id));
+      this._applyKind(l);
+    }
+    this._activeIds = set;
+    this._syncLinkActive();
+  }
+
+  focusNodes(ids) {
+    const pts = ids.map((id) => this.cities[id]?.pos).filter(Boolean);
+    if (!pts.length) return;
+    const cen = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    const r = pts.reduce((m, p) => Math.max(m, p.distanceTo(cen)), 0);
+    this._flyTo(new THREE.Vector3(cen.x, 0.15, cen.z), THREE.MathUtils.clamp(7 + r * 2.4, 8, 22));
+  }
+
+  // Click-to-place: while on, a click (not a drag) on the terrain calls cb({lat, lon, elevation_m}).
+  setPickMode(on, cb = null) {
+    this._pickCb = on ? cb : null;
+    this.renderer.domElement.style.cursor = on ? "crosshair" : "";
+  }
+
+  _pickTerrain(e) {
+    const el = this.renderer.domElement;
+    const rect = el.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = this.raycaster.intersectObject(this.terrain, false)[0];
+    if (!hit) return null;
+    const { lat, lon } = fromScene(hit.point.x, hit.point.z);
+    return { lat, lon, elevation_m: elevationM(lat, lon) };
   }
 
   // --- Pointer / hover ----------------------------------------------------------
@@ -856,6 +1001,19 @@ export class NetworkScene {
     });
     el.addEventListener("pointerleave", () => {
       this._lastPointerClient = null;
+    });
+    // A click that is not a drag (OrbitControls uses drags) places a node when pick mode is on.
+    let down = null;
+    el.addEventListener("pointerdown", (e) => {
+      down = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    });
+    el.addEventListener("pointerup", (e) => {
+      const d = down;
+      down = null;
+      if (!d || !this._pickCb) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5 || performance.now() - d.t > 700) return;
+      const p = this._pickTerrain(e);
+      this._pickCb(p);
     });
   }
 
@@ -978,7 +1136,7 @@ export class NetworkScene {
       const r = it.el.getBoundingClientRect();
       rect[4 * i] = r.left; rect[4 * i + 1] = r.top; rect[4 * i + 2] = r.right; rect[4 * i + 3] = r.bottom;
       live[i] = it.el.style.display !== "none" && r.width > 0 && r.right > view.left && r.left < view.right && r.bottom > view.top && r.top < view.bottom ? 1 : 0;
-      prio[i] = it.link ? (it.link.id === this._activeLinkId || it.link.id === this._hoverLinkId ? 0 : 1) : it.prio;
+      prio[i] = it.link ? (this._activeIds.has(it.link.id) || it.link.id === this._hoverLinkId ? 0 : 1) : it.prio;
     }
     // insertion sort of the persistent index array by (priority, index): no allocation
     for (let i = 1; i < n; i++) {

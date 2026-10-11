@@ -20,6 +20,7 @@ import { setIconText } from "./ui/icons.js";
 import { decorate } from "./ui/glossary.js";
 import { createTour } from "./ui/tour.js";
 import { createLeakView } from "./ui/leak.js";
+import { createSandboxView, sandboxResultCards, parityFromF, BUILTIN_PRESETS } from "./ui/sandbox.js";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -51,6 +52,7 @@ const els = {
   legendArrow: $("legend-arrow"),
   langBtn: $("lang-btn"),
   cityList: $("city-list"),
+  citiesSection: $("cities-section"),
   cityInfo: $("city-info"),
   attribution: $("attribution"),
 };
@@ -71,9 +73,19 @@ let selectedCity = null;
 let status = { state: "ready", secs: 0, note: null };
 let leak = null;
 let tour = null;
+let presetsRequested = false;
 
 // Chapter 4 of the story: pure-JS explainer placed right after "noise" (no backend level).
 const LEAK_LEVEL = { id: "leak", title: "Noise is someone listening", summary: "One dial: how much information leaks to a third party.", params: {} };
+
+// Chapter 9: free sandbox on the current map region (Python: api.sandbox / api.sandbox_presets).
+const SANDBOX_LEVEL = { id: "sandbox", title: "Build your own network", summary: "Place cities, wire links, pick two endpoints and measure the route.", params: {} };
+
+const sandboxView = createSandboxView(els.params, {
+  getScene: () => scene,
+  onChange: () => onSandboxEdited(),
+  onNotice: () => {},
+});
 
 // Which geographic link each level animates by default.
 const LEVEL_LINK = {
@@ -104,6 +116,7 @@ function setState(state, secs = 0, note = null) {
   els.runBtn.disabled = busy;
   els.levelSelect.disabled = busy;
   els.exportBtn.disabled = busy;
+  sandboxView.setBusy(busy);
   els.results.setAttribute("aria-busy", String(busy));
 }
 
@@ -147,6 +160,7 @@ onLangChange((lang) => {
   if (shown) renderShownText();
   else renderExplainer(els.levelSelect.value, null);
   leak?.render();
+  if (els.levelSelect.value === "sandbox") sandboxView.render();
   tour?.render();
   syncRegionBtn();
   if (els.levelSelect.value === "leak") showLeakHints();
@@ -155,7 +169,7 @@ onLangChange((lang) => {
 // --- explainer ---------------------------------------------------------------
 function renderExplainer(levelId, result) {
   els.explainer.replaceChildren();
-  if (!hasExplain(levelId)) return;
+  if (!hasExplain(levelId) && levelId !== "sandbox") return;
   const title = document.createElement("p");
   title.className = "explainer__title";
   title.textContent = `${t("ex.prefix")} · ${explainTitle(levelId)}`;
@@ -163,7 +177,7 @@ function renderExplainer(levelId, result) {
   body.className = "explainer__body";
   body.innerHTML = explainBefore(levelId); // our own dictionary markup
   if (result) {
-    const line = explainAfter(levelId, result);
+    const line = levelId === "sandbox" ? (result.ok === false ? "" : t("ex.sandbox.after")) : explainAfter(levelId, result);
     if (line) {
       body.appendChild(document.createElement("br"));
       body.appendChild(document.createElement("br"));
@@ -184,7 +198,9 @@ function renderExplainer(levelId, result) {
 
 // --- cities (keyboard access in addition to 3D hover) ------------------------
 function cityRows(data) {
-  const info = cityTooltip(data);
+  const info = data.sandbox
+    ? { title: data.name, rows: [t("city.coords", { lat: data.lat.toFixed(3), lon: data.lon.toFixed(3) })] }
+    : cityTooltip(data);
   const frag = document.createDocumentFragment();
   const title = document.createElement("div");
   title.className = "tooltip__title";
@@ -290,6 +306,14 @@ function selectLevel(id, { focus = true } = {}) {
   shown = null;
   syncExport();
   const isLeak = id === "leak";
+  const isSandbox = id === "sandbox";
+  if (!isSandbox) {
+    sandboxView.unmount();
+    scene?.leaveSandbox();
+  }
+  els.app.classList.toggle("is-sandbox", isSandbox);
+  els.runBtn.dataset.i18n = isSandbox ? "sandbox.run" : "run";
+  els.runBtn.textContent = t(els.runBtn.dataset.i18n);
   leak?.[isLeak ? "show" : "hide"]();
   els.regionBtn.hidden = isLeak;
   els.legend.hidden = isLeak;
@@ -298,6 +322,12 @@ function selectLevel(id, { focus = true } = {}) {
   if (isLeak) {
     showLeakHints();
     renderExplainer(id, null);
+    return;
+  }
+  if (isSandbox) {
+    enterSandbox();
+    renderExplainer(id, null);
+    syncRegionBtn();
     return;
   }
   buildParamsForm(els.params, lvl, { ionq: /ionq/i.test(bridge.backendName()) });
@@ -312,6 +342,64 @@ function selectLevel(id, { focus = true } = {}) {
   const linkId = LEVEL_LINK[id];
   if (focus && linkId && scene) scene.focusLink(linkId);
   syncRegionBtn();
+}
+
+// --- chapter 9: sandbox -------------------------------------------------------------
+function showSandboxHint(stale = false) {
+  els.results.replaceChildren();
+  const empty = document.createElement("p");
+  empty.className = "results__empty";
+  empty.textContent = t(stale ? "sandbox.res.stale" : "sandbox.res.hint");
+  els.results.appendChild(empty);
+}
+
+function enterSandbox() {
+  if (/ionq/i.test(bridge.backendName())) sandboxView.setDefaultShots(500); // one small job
+  els.params.replaceChildren();
+  sandboxView.mount(); // renders the form and draws the demo graph on the map
+  showSandboxHint();
+  scene?.viewRegion(); // the sandbox covers the whole region
+  if (!presetsRequested) {
+    presetsRequested = true;
+    sandboxView.setPresets(BUILTIN_PRESETS); // usable at once; the Python list replaces it when it arrives
+    bridge.sandboxPresets().then((res) => {
+      if (!res?.cities?.length) return;
+      sandboxView.setPresets(res.cities);
+      sandboxView.setExample(res.example);
+    }).catch(() => {});
+  }
+}
+
+// Any edit of the graph or the endpoints makes the shown result stale.
+function onSandboxEdited() {
+  if (els.levelSelect.value !== "sandbox" || !shown) return;
+  shown = null;
+  scene?.clearPhotons();
+  scene?.resetLinks();
+  syncExport();
+  showSandboxHint(true);
+}
+
+function updateSandboxScene(r) {
+  if (!scene) return;
+  scene.clearPhotons();
+  scene.resetLinks();
+  if (!r) return;
+  const vizLinks = r.viz?.links;
+  let items = Array.isArray(vizLinks) ? vizLinks : Object.entries(vizLinks ?? {}).map(([id, v]) => ({ id, ...v }));
+  if (!items.length) items = (r.hops ?? []).map((h) => ({ a: h.a, b: h.b, F_theory: h.F }));
+  const ids = [];
+  for (const l of items) {
+    const id = (l.a && l.b ? scene.findLinkId(l.a, l.b) : null) ?? (scene.links[l.id] ? l.id : null);
+    if (!id || ids.includes(id)) continue;
+    const F = l.F_theory ?? l.F ?? null;
+    scene.setLinkStates({ [id]: { F, status: l.status } });
+    ids.push(id);
+    const given = r.viz?.samples?.[id];
+    scene.emitPhotons(id, Array.isArray(given) && given.length ? given : parityFromF(F ?? 1));
+  }
+  scene.emphasizeRoute(ids);
+  if (Array.isArray(r.route) && r.route.length) scene.focusNodes(r.route);
 }
 
 function syncRegionBtn() {
@@ -349,6 +437,7 @@ async function run({ auto = false } = {}) {
   const levelId = els.levelSelect.value;
   if (!levelsById[levelId]) return;
   if (levelId === "leak") return runLeak();
+  if (levelId === "sandbox") return runSandbox({ auto });
   const params = readParams(els.params);
   setState("running", 0, auto ? "autorun.running" : null);
   // Local simulators block the main thread: paint "Running" before Python starts.
@@ -362,6 +451,11 @@ async function run({ auto = false } = {}) {
   } catch (err) {
     result = { ok: false, error: String(err?.message ?? err) };
   }
+  settle(levelId, result);
+}
+
+// Shared tail of run() and runSandbox(): paint a bridge result (or nothing, if stale/ignored).
+function settle(levelId, result, extra = {}) {
   if (result === null || result === undefined) {
     // Stale (a newer request replaced it) or ignored (busy): do not paint anything.
     if (status.state === "running") setState("ready");
@@ -376,9 +470,32 @@ async function run({ auto = false } = {}) {
   // A failed live call that still shows a recorded result is not a failure for the user.
   const hasRecorded = result.ok === false && !!result.fallback?.result;
   setState(result.ok === false && !hasRecorded ? "failed" : hasRecorded ? "recorded" : "success");
-  shown = { levelId, result };
+  shown = { levelId, result, ...extra };
   renderShown();
   syncExport();
+}
+
+// Chapter 9: validate the graph on the client (nothing is sent if it is invalid), then run it.
+async function runSandbox() {
+  if (status.state === "running") return;
+  const v = sandboxView.validate();
+  if (!v.ok) {
+    sandboxView.notice(v.key, v.vars);
+    return;
+  }
+  const names = sandboxView.names(); // names as they were when the run started
+  setState("running", 0);
+  await nextFrame();
+  let result;
+  try {
+    result = await bridge.runSandbox(v.graph, v.shots, {
+      onState: (s) => (s === "running" ? setState("running", status.secs, status.note) : setState(s)),
+      onTick: (secs) => setState("running", secs, status.note),
+    });
+  } catch (err) {
+    result = { ok: false, error: String(err?.message ?? err) };
+  }
+  settle("sandbox", result, { names });
 }
 
 // --- export (download the displayed result as JSON) -------------------------------
@@ -417,6 +534,21 @@ function renderShownText() {
   const { levelId, result } = shown;
   renderResult(els.results, result);
   const vis = visibleResult(result);
+  if (levelId === "sandbox") {
+    if (result?.ok !== false) {
+      const cards = sandboxResultCards(result, shown.names);
+      const meta = els.results.querySelector(".meta");
+      if (meta) meta.after(cards);
+      else els.results.prepend(cards);
+    } else if (result.code === "ionq_too_wide") {
+      const hint = document.createElement("p");
+      hint.className = "meta__line";
+      hint.textContent = t("sandbox.err.too_wide_hint");
+      els.results.appendChild(hint);
+    }
+    renderExplainer(levelId, vis);
+    return;
+  }
   const ls = linkStatusOf(levelId, vis);
   if (ls) els.results.appendChild(linkStatusCard(ls));
   // Chapter 1 only, and not when the recording itself is what is on screen.
@@ -468,6 +600,7 @@ function linkStatusOf(levelId, r) {
 
 // Paints the 3D scene (links, photons, camera). Only called after a run, never on a language change.
 function updateScene(levelId, r) {
+  if (levelId === "sandbox") return updateSandboxScene(r);
   if (!scene) return;
   scene.clearPhotons();
   scene.resetLinks();
@@ -555,6 +688,8 @@ async function boot() {
   const levels = [...infoData.levels];
   const at = levels.findIndex((l) => l.id === "noise");
   levels.splice(at >= 0 ? at + 1 : levels.length, 0, LEAK_LEVEL);
+  if (!levels.some((l) => l.id === "sandbox")) levels.push(SANDBOX_LEVEL); // chapter 9, last
+  sandboxView.setLimits(infoData.sandbox?.limits ?? infoData.sandbox);
   for (const lvl of levels) {
     levelsById[lvl.id] = lvl;
     const opt = document.createElement("option");
