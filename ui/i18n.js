@@ -370,7 +370,7 @@ const EN = {
   "mystery.reveal.h": "The reveal",
   "mystery.truth.noise": "It was the environment: Werner noise with F = {F}. Theory: QBER Z = QBER X = {q}.",
   "mystery.truth.spy": "It was a spy: Eve copies Bob's qubit with CRY(θ = {deg}°), F = {F}. Theory: QBER Z = 0, QBER X = {qx}.",
-  "mystery.verdict": "Detector: {verdict} (z = {z}, p = {p}; {conf}).",
+  "mystery.verdict": "Detector: {verdict} (z = {z}, {p}; {conf}).",
   "mystery.verdict.noise": "noise",
   "mystery.verdict.spy": "spy",
   "mystery.verdict.undecided": "undecided",
@@ -382,6 +382,9 @@ const EN = {
   "mystery.why.spy": "Why: a spy that only couples in one basis leaves Z clean and spoils X.",
   "mystery.why.noise": "Why: noise has no favourite basis, so it spoils Z and X by the same amount.",
   "mystery.why.undecided": "Why it was hard: with this many errors and shots, Z and X cannot be told apart reliably. More shots would help.",
+  "mystery.played": "This Run's single IonQ job already produced this mystery: it was already played.",
+  "mystery.miss.noise": "The test is wrong about 1 time in 40 for noise: this was one of those.",
+  "mystery.miss.spy": "The test can miss a spy when the leak is small or the shots are few: this was one of those.",
   "mystery.same": "Both culprits draw their fidelity from the same range (0.80 to 0.97), so F alone could not tell them apart.",
 
   // --- chapter 9: build your own network (sandbox) --------------------------------
@@ -805,7 +808,7 @@ const ES = {
   "mystery.reveal.h": "La revelación",
   "mystery.truth.noise": "Era el entorno: ruido de Werner con F = {F}. Teoría: QBER Z = QBER X = {q}.",
   "mystery.truth.spy": "Era un espía: Eve copia el qubit de Bob con CRY(θ = {deg}°), F = {F}. Teoría: QBER Z = 0, QBER X = {qx}.",
-  "mystery.verdict": "Detector: {verdict} (z = {z}, p = {p}; {conf}).",
+  "mystery.verdict": "Detector: {verdict} (z = {z}, {p}; {conf}).",
   "mystery.verdict.noise": "ruido",
   "mystery.verdict.spy": "espía",
   "mystery.verdict.undecided": "indeciso",
@@ -817,6 +820,9 @@ const ES = {
   "mystery.why.spy": "Por qué: un espía que solo se acopla en una base deja Z limpio y estropea X.",
   "mystery.why.noise": "Por qué: el ruido no tiene base favorita, así que estropea Z y X por igual.",
   "mystery.why.undecided": "Por qué fue difícil: con tan pocos errores y disparos no se distingue Z de X con fiabilidad. Más disparos ayudarían.",
+  "mystery.played": "El único trabajo de IonQ de este Run ya produjo este misterio: ya se jugó.",
+  "mystery.miss.noise": "La prueba se equivoca cerca de 1 vez de cada 40 con ruido: esta fue una de esas.",
+  "mystery.miss.spy": "La prueba puede no detectar a un espía cuando la fuga es pequeña o hay pocos disparos: esta fue una de esas.",
   "mystery.same": "Ambos culpables sacan su fidelidad del mismo rango (0,80 a 0,97), así que F sola no los distingue.",
 
   // --- capítulo 9: construye tu propia red (sandbox) ---------------------------------

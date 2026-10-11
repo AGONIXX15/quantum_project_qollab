@@ -30,7 +30,10 @@ Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · C
    *Who is listening?* mystery mode of chapter 4 a hidden culprit (noise or spy, drawn with
    fidelity in the same 0.80 to 0.97 range) damages a pair. You run real Z and X circuits,
    read the two QBER bars with their 95 % intervals, make your call, and compare with a
-   two-proportion z-test; this makes the idea testable with data, not only a slogan.
+   two-proportion z-test; this makes the idea testable with data, not only a slogan. The test
+   is not perfect: it calls a noisy pair a spy about 1 time in 40 (one-sided z ≥ 1.96, 2.5 %),
+   and the game says so when that happens. Fidelity is estimated from Z and X only, assuming
+   $\langle YY\rangle=-\langle XX\rangle$, which holds for both candidates.
 2. **Adaptive purification that works where the textbook protocol fails.** Under amplitude
    damping, standard DEJMPS does not improve the pair (0.900 → 0.890 in our run). Choosing a
    local twist $U\otimes U^*$ from measured XX/YY/ZZ correlators does (→ 0.980).

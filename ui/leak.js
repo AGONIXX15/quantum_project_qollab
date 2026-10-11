@@ -22,7 +22,7 @@
   Backend text is only ever inserted with textContent.
 */
 
-import { t } from "./i18n.js";
+import { t, getLang } from "./i18n.js";
 import { decorate } from "./glossary.js";
 import { icon } from "./icons.js";
 
@@ -193,18 +193,26 @@ function parseSpy(res, requestedDeg) {
 // ---- mystery helpers (pure) ----------------------------------------------------
 const MYSTERY_KINDS = ["noise", "spy"];
 
-// api.mystery result -> { qz, qzLo, qzHi, qx, ..., F, truth, detector, backend, shots } or null if malformed.
+// Bridge result (public fingerprint + reveal()) -> parsed fingerprint, or null if malformed.
+// The hidden truth is NOT copied into the parsed object: only the reveal() function is kept.
 export function parseMystery(res) {
   const m = res?.ok === true ? res.metrics : null;
   const [zLo, zHi] = ciOf(m?.qber_Z), [xLo, xHi] = ciOf(m?.qber_X);
   if (typeof m?.qber_Z?.value !== "number" || typeof m?.qber_X?.value !== "number" || zLo == null || xLo == null) return null;
-  if (!MYSTERY_KINDS.includes(res.truth?.kind) || !res.detector) return null;
+  const secret = typeof res.reveal === "function" ? res.reveal() : null;
+  if (!MYSTERY_KINDS.includes(secret?.truth?.kind) || !secret.detector) return null;
   return {
-    qz: m.qber_Z.value, qzLo: zLo, qzHi: zHi, qzTh: m.qber_Z.theory,
-    qx: m.qber_X.value, qxLo: xLo, qxHi: xHi, qxTh: m.qber_X.theory,
-    F: m.fidelity?.value, truth: res.truth, detector: res.detector, backend: res.backend, shots: res.shots,
+    qz: m.qber_Z.value, qzLo: zLo, qzHi: zHi, qx: m.qber_X.value, qxLo: xLo, qxHi: xHi,
+    F: m.fidelity?.value, reveal: res.reveal, backend: res.backend, shots: res.shots, cached: res.cached_run === true,
   };
 }
+
+// Locale-aware number (decimal comma in ES) and percentages for the mystery texts.
+const nf = (v, d = 1) => new Intl.NumberFormat(getLang(), { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
+const pc = (v, d = 1) => `${nf(v * 100, d)}%`;
+// Confidence in percent, never "100": >= 99.9 is shown as "≥ 99.9".
+const confText = (c) => { const x = c * 100; return x >= 99.9 ? `≥ ${nf(99.9, 1)}` : x >= 99 ? nf(x, 1) : String(Math.round(x)); };
+const pText = (p) => (Number(p) < 0.001 ? "p < 0.001" : `p = ${nf(Number(p), 3)}`);
 
 // Two QBER bars with 95 % CI whiskers. Z = solid, X = hatched, each labelled with its number (not colour only).
 function fingerprint(my, aria) {
@@ -217,7 +225,7 @@ function fingerprint(my, aria) {
   for (let i = 0; i <= 4; i++) {
     const v = (top * i) / 4;
     root.appendChild(svg("line", { x1: L, x2: W - R, y1: py(v), y2: py(v), stroke: "rgba(150,180,220,0.16)" }));
-    root.appendChild(txt(L - 6, py(v) + 4, `${(v * 100).toFixed(top < 0.1 ? 1 : 0)}%`, { "text-anchor": "end" }));
+    root.appendChild(txt(L - 6, py(v) + 4, pc(v, top < 0.1 ? 1 : 0), { "text-anchor": "end" }));
   }
   const bars = [
     { x: 100, label: t("mystery.fp.z"), v: my.qz, lo: my.qzLo, hi: my.qzHi, fill: "#1d6f63" },
@@ -228,7 +236,7 @@ function fingerprint(my, aria) {
     root.appendChild(svg("line", { x1: b.x, x2: b.x, y1: py(b.hi), y2: py(b.lo), stroke: INK, "stroke-width": 2 }));
     for (const e of [b.hi, b.lo]) root.appendChild(svg("line", { x1: b.x - 8, x2: b.x + 8, y1: py(e), y2: py(e), stroke: INK, "stroke-width": 2 }));
     root.appendChild(txt(b.x, H - B + 16, b.label, { "text-anchor": "middle", fill: INK, "font-weight": 600 }));
-    root.appendChild(txt(b.x, H - B + 30, `${(b.v * 100).toFixed(1)}% [${(b.lo * 100).toFixed(1)}, ${(b.hi * 100).toFixed(1)}]`, { "text-anchor": "middle", "font-size": 10.5 }));
+    root.appendChild(txt(b.x, H - B + 30, `${pc(b.v)} [${nf(b.lo * 100)}, ${nf(b.hi * 100)}]`, { "text-anchor": "middle", "font-size": 10.5 }));
   }
   root.appendChild(svg("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "none", stroke: "rgba(150,180,220,0.35)" }));
   return root;
@@ -437,29 +445,35 @@ export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, 
   }
 
   // ---- mystery ---------------------------------------------------------------------
-  const pc1 = (v) => `${(v * 100).toFixed(1)}%`;
+  const pc1 = (v) => pc(v);
+  const ionqNow = () => !!isIonq?.();
 
   function renderMystery() {
     const my = state.my;
     mysH.textContent = t("mystery.h");
     mysIntro.textContent = t("mystery.intro");
     mysBtn.textContent = my.phase === "running" ? t("leak.measuring") : my.phase === "revealed" ? t("mystery.btn.again") : t("mystery.btn");
-    mysBtn.disabled = my.phase === "running" || state.measuring;
-    const ionq = !!isIonq?.();
-    mysHint.textContent = ionq ? t("mystery.ionq") : "";
-    mysHint.hidden = !ionq;
+    // IonQ: the Run's single job is spent once a mystery is on screen; "play again" would only re-serve it.
+    const spent = ionqNow() && (my.phase === "guess" || my.phase === "revealed");
+    mysBtn.disabled = my.phase === "running" || state.measuring || spent;
+    mysHint.textContent = ionqNow() ? t("mystery.ionq") : "";
+    mysHint.hidden = !ionqNow();
     mysOut.setAttribute("aria-busy", String(my.phase === "running"));
     if (my.phase === "idle" || my.phase === "running" || my.phase === "failed" || !my.parsed) {
       mysOut.replaceChildren();
+      mysOut.removeAttribute("role");
+      mysOut.removeAttribute("aria-labelledby");
       return;
     }
     const p = my.parsed;
+    const revealed = my.phase === "revealed";
     const nodes = [];
-    nodes.push(el("h4", "leak__mys-sub", t("mystery.fp.h")));
+    const fpH = el("h4", "leak__mys-sub", t("mystery.fp.h"));
+    nodes.push(fpH);
     const fig = el("div", "leak__chart");
-    fig.appendChild(fingerprint(p, t("mystery.fp.aria", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? p.F.toFixed(2) : "—" })));
+    fig.appendChild(fingerprint(p, t("mystery.fp.aria", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? nf(p.F, 2) : "—" })));
     nodes.push(fig);
-    nodes.push(el("p", "leak__mys-nums", t("mystery.fp.text", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? p.F.toFixed(3) : "—", n: p.shots, backend: String(p.backend ?? "") })));
+    nodes.push(el("p", "leak__mys-nums", t("mystery.fp.text", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? nf(p.F, 3) : "—", n: p.shots, backend: String(p.backend ?? "") })));
     const pick = el("div", "leak__mys-pick");
     pick.setAttribute("role", "group");
     pick.setAttribute("aria-label", t("mystery.pick"));
@@ -469,50 +483,63 @@ export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, 
       const b = el("button", "btn btn--small", t(`mystery.pick.${kind}`));
       b.type = "button";
       b.dataset.guess = kind;
-      b.disabled = my.phase === "revealed";
-      if (my.phase === "revealed") b.setAttribute("aria-pressed", String(my.guess === kind));
+      b.disabled = revealed;
+      if (revealed) b.setAttribute("aria-pressed", String(my.guess === kind));
       b.addEventListener("click", () => guess(kind));
       row.appendChild(b);
     }
     pick.appendChild(row);
     nodes.push(pick);
-    if (my.phase === "revealed") nodes.push(revealBlock(p, my.guess));
+    let heading = fpH;
+    if (revealed) {
+      const box = revealBlock(p, my.guess);
+      heading = box.heading;
+      nodes.push(box);
+    }
+    heading.id = "leak-mys-out-h";
+    mysOut.setAttribute("role", "region"); // the focus target is a named region
+    mysOut.setAttribute("aria-labelledby", heading.id);
     mysOut.replaceChildren(...nodes);
   }
 
   function truthText(tr) {
     const c = typeof tr.c === "number" ? tr.c : 2 * tr.F - 1;
     return tr.kind === "spy"
-      ? t("mystery.truth.spy", { deg: (tr.theta_deg ?? (tr.theta * 180) / Math.PI).toFixed(0), F: tr.F.toFixed(3), qx: pc1((1 - c) / 2) })
-      : t("mystery.truth.noise", { F: tr.F.toFixed(3), q: pc1((2 * (1 - tr.F)) / 3) });
+      ? t("mystery.truth.spy", { deg: nf(tr.theta_deg ?? (tr.theta * 180) / Math.PI, 0), F: nf(tr.F, 3), qx: pc1((1 - c) / 2) })
+      : t("mystery.truth.noise", { F: nf(tr.F, 3), q: pc1((2 * (1 - tr.F)) / 3) });
   }
 
   function revealBlock(p, guessed) {
-    const d = p.detector, tr = p.truth;
+    const { truth: tr, detector: d } = p.reveal(); // the only place the hidden truth is read
     const box = el("div", "leak__mys-reveal");
-    box.appendChild(el("h4", "leak__mys-sub", t("mystery.reveal.h")));
-    const right = guessed === tr.kind;
-    box.appendChild(el("p", "leak__mys-you", `${right ? t("mystery.you.right") : t("mystery.you.wrong")} ${t(`mystery.pick.${guessed}`)} → ${t(`mystery.pick.${tr.kind}`)}`));
+    box.heading = box.appendChild(el("h4", "leak__mys-sub", t("mystery.reveal.h")));
+    if (guessed) {
+      const right = guessed === tr.kind;
+      box.appendChild(el("p", "leak__mys-you", `${right ? t("mystery.you.right") : t("mystery.you.wrong")} ${t(`mystery.pick.${guessed}`)} → ${t(`mystery.pick.${tr.kind}`)}`));
+    } else {
+      box.appendChild(el("p", "leak__mys-you", t("mystery.played")));
+    }
     box.appendChild(el("p", "leak__mys-truth", truthText(tr)));
-    const v = ["noise", "spy"].includes(d.verdict) ? d.verdict : "undecided";
-    const conf = t(`mystery.conf.${v}`, { c: Math.round((d.confidence ?? 0) * 100) });
+    const v = MYSTERY_KINDS.includes(d.verdict) ? d.verdict : "undecided";
     box.appendChild(el("p", "leak__mys-verdict", t("mystery.verdict", {
-      verdict: t(`mystery.verdict.${v}`), z: Number(d.z).toFixed(2), p: Number(d.p_value) < 0.001 ? "<0.001" : Number(d.p_value).toFixed(3), conf,
+      verdict: t(`mystery.verdict.${v}`), z: nf(Number(d.z), 2), p: pText(d.p_value),
+      conf: t(`mystery.conf.${v}`, { c: confText(d.confidence ?? 0) }),
     })));
-    box.appendChild(el("p", "leak__mys-why", t(`mystery.why.${tr.kind}`)));
+    box.appendChild(el("p", "leak__mys-why", t(`mystery.why.${tr.kind}`))); // explains the TRUTH, not the verdict
     if (v === "undecided") box.appendChild(el("p", "leak__mys-why", t("mystery.why.undecided")));
+    else if (v !== tr.kind) box.appendChild(el("p", "leak__mys-miss", t(`mystery.miss.${tr.kind}`)));
     box.appendChild(el("p", "leak__mys-same", t("mystery.same")));
     return box;
   }
 
   function guess(kind) {
     if (state.my.phase !== "guess") return;
+    const { truth } = state.my.parsed.reveal();
     state.my = { ...state.my, phase: "revealed", guess: kind };
     renderMystery();
     mysOut.querySelector(".leak__mys-reveal")?.scrollIntoView?.({ block: "nearest" });
-    mysOut.focus({ preventScroll: true }); // the reveal sits in the focused region; mysStatus announces it
-    const right = kind === state.my.parsed.truth.kind;
-    setMysStatus(`${right ? t("mystery.you.right") : t("mystery.you.wrong")} ${truthText(state.my.parsed.truth)}`, "ok");
+    mysOut.focus({ preventScroll: true }); // named region; mysStatus (polite) announces the outcome
+    setMysStatus(`${kind === truth.kind ? t("mystery.you.right") : t("mystery.you.wrong")} ${truthText(truth)}`, "ok");
   }
 
   function setMysStatus(msg, kind = "info") {
@@ -543,6 +570,10 @@ export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, 
       out.busy = true;
       state.my = { phase: "idle" };
       setMysStatus(t("leak.busy"), "info");
+    } else if (parsed && parsed.cached) {
+      // cached_run: this Run's single IonQ job already produced this mystery: it was already played.
+      state.my = { phase: "revealed", parsed, guess: null };
+      setMysStatus(t("mystery.ionq_used"), "info");
     } else if (parsed) {
       state.my = { phase: "guess", parsed, guess: null };
       setMysStatus(t("mystery.measured"), "ok");
@@ -556,7 +587,8 @@ export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, 
     }
     render();
     if (state.my.phase === "guess") mysOut.querySelector("[data-guess]")?.focus();
-    else mysBtn.focus();
+    else if (state.my.phase === "revealed") mysOut.focus({ preventScroll: true });
+    else if (!mysBtn.disabled) mysBtn.focus();
     return out;
   }
 

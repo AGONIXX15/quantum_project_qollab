@@ -159,8 +159,19 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
   // api.mystery(backend, seed, shots): "Who is listening?" (chapter 4). seed null = a fresh hidden culprit.
   // Same busy/stale/timeout handling as runSandbox. No recorded fallback exists.
+  // The hidden truth must not reach the view before the player guesses, so a successful result is
+  // reduced to the public fingerprint (QBER values and CIs, backend, shots) and everything that could
+  // reveal the culprit (truth, seed, circuits, counts, theory values, detector) stays in a closure,
+  // handed over only by res.reveal().
   async function runMystery(shots = 1000, hooks, seed = null) {
-    return callApi(api.mystery, [seed, shots], hooks);
+    const res = await callApi(api.mystery, [seed, shots], hooks);
+    if (!res || res.ok !== true) return res; // failures carry no truth (needed_qubits is the same for both kinds)
+    const { truth, detector, params, circuits, counts, viz, metrics, ...rest } = res;
+    const pub = {};
+    for (const [k, m] of Object.entries(metrics ?? {})) pub[k] = { value: m?.value, ci95: m?.ci95 };
+    const theory = Object.fromEntries(Object.entries(metrics ?? {}).map(([k, m]) => [k, m?.theory]));
+    const secret = { truth, detector, theory };
+    return { ...rest, metrics: pub, reveal: () => secret };
   }
 
   // api.sandbox_presets(): no backend argument. Returns {cities, example, bbox} or null on any failure

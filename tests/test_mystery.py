@@ -100,10 +100,54 @@ def test_theory_matches_formulas_and_metrics_within_ci(kind):
 
 
 def test_names_do_not_leak_the_kind():
+    seen = {}
     for kind in ("noise", "spy"):
         r = mystery.run_mystery(BasicSimulator(), seed_of(kind), 200, **OPTS)
-        text = json.dumps([[c["id"] for c in r["circuits"]], list(r["counts"]), r["params"]])
+        text = json.dumps([[c["id"] for c in r["circuits"]], list(r["counts"]), r["params"]["F_range"]])
         assert "th" not in text and "F0" not in text and "spy" not in text
+        seen[kind] = {
+            "qubits": [c["qubits"] for c in r["circuits"]],
+            "widths": {len(k) for c in r["counts"].values() for k in c},
+            "bit_order": r["bit_order"],
+        }
+    assert seen["noise"] == seen["spy"]
+    assert seen["noise"]["qubits"] == [mystery.N_QUBITS] * 2 and seen["noise"]["widths"] == {2}
+
+
+def test_ionq_needed_qubits_and_packed_width_identical():
+    needed, widths = set(), set()
+    for kind in ("noise", "spy"):
+        out = api.mystery(FakeIonQ(num_qubits=5), seed_of(kind), 200)
+        assert out["code"] == "ionq_too_wide"
+        needed.add(out["needed_qubits"])
+        be = ionq_counting()
+        r = api.mystery(be, seed_of(kind), 200)
+        widths.add(be.runs[0][0].num_qubits)
+        assert {len(k) for c in r["counts"].values() for k in c} == {2}
+    assert needed == {2 * mystery.N_QUBITS} and widths == {2 * mystery.N_QUBITS}
+
+
+@pytest.mark.parametrize("shots", [1000, 500])
+def test_detector_accuracy_at_ui_shot_counts(shots):
+    """Binomial sampling of the theory QBERs over the real culprit distribution."""
+    import numpy as np
+    rng = np.random.default_rng(11)
+    n_cases = 1500
+    false_spy = spy_hit = n_noise = n_spy = 0
+    for s in range(n_cases):
+        t = mystery.draw_culprit(s)
+        th = api.qkd.theory_qkd(t["theta"]) if t["kind"] == "spy" else api.qkd.theory_qkd(F=t["F"])
+        kz = int(rng.binomial(shots, th["qber_Z"]))
+        kx = int(rng.binomial(shots, th["qber_X"]))
+        v = mystery.detect(kz, shots, kx, shots)["verdict"]
+        if t["kind"] == "noise":
+            n_noise += 1
+            false_spy += v == "spy"
+        else:
+            n_spy += 1
+            spy_hit += v == "spy"
+    assert false_spy / n_noise < 0.06, false_spy / n_noise
+    assert spy_hit / n_spy > 0.95, spy_hit / n_spy
 
 
 def test_measure_at_end_builders():

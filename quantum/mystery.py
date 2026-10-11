@@ -10,10 +10,15 @@ differs is the fingerprint of the errors (``qkd`` docstring):
     - spy:       QBER_Z = 0, QBER_X = (1-c)/2 = 1-F, c = cos(theta/2), F = (1+c)/2.
 
 Circuits: the ZZ and XX circuits of ``qkd.build_qkd`` (the existing builders, measured
-only at the end), renamed ``mystery_ZZ`` / ``mystery_XX`` so that the names carry no
-hint. Bit order (register ``out``, Qiskit little-endian): clbit 0 = A, 1 = B, and for
-the spy clbit 2 = E (not used here). QBER = fraction of shots where clbit 0 XOR
-clbit 1 is 1. On IonQ both circuits go out packed in ONE circuit and ONE job.
+only at the end), renamed ``mystery_ZZ`` / ``mystery_XX`` and made structurally identical
+for both culprits so nothing but the data hints at the kind: both have ``N_QUBITS`` = 4
+qubits (the spy circuit gets an idle padding qubit; Eve's own Helstrom rotation and
+measurement are dropped, they are not needed here) and a 2-bit register ``out``.
+Bit order (Qiskit little-endian): clbit 0 = A, 1 = B. QBER = fraction of shots where
+clbit 0 XOR clbit 1 is 1. On IonQ both circuits go out packed in ONE circuit and ONE job
+(8 qubits for either kind). Gate counts and depth still differ between the kinds; the UI
+never shows them (the bridge strips ``circuits``, ``counts``, ``truth`` and ``params``
+until the player has guessed).
 
 Fidelity: only Z and X are measured, so F = (1 + <ZZ> + 2<XX>)/4. This uses <YY> = -<XX>,
 which holds for both candidates (Werner and the CRY spy). It is a model-based estimate
@@ -31,6 +36,11 @@ p-value from the normal distribution. Verdict, at the 95 % level (|z| < 1.96):
     - "undecided": anything else (no errors seen, Z worse than X, or a mixed pattern).
 The detector knows nothing about the hidden truth.
 
+Error rates of the test (nominal, one-sided): under noise, z >= 1.96 happens with
+probability 2.5 % (about 1 case in 40), so that is the false-"spy" rate; the test_mystery
+accuracy test measures it at the UI's real shot counts (1000, 500 on IonQ). A spy is
+missed ("noise" or "undecided") when the leak or the shot count is too small.
+
 References:
     - Ekert (1991). Phys. Rev. Lett. 67:661; Bennett, Brassard, Mermin (1992).
     - Werner (1989). Phys. Rev. A 40:4277.
@@ -44,17 +54,19 @@ import secrets
 from typing import Any
 
 import numpy as np
-from qiskit import QuantumCircuit
+from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 
 from . import analysis as an
 from .execute import circuit_report, run_batch, run_packed
-from .qkd import BIT_ORDER, build_qkd, theory_qkd
+from .qkd import build_qkd, theory_qkd
 
 F_LO, F_HI = 0.80, 0.97  # fidelity range of both culprits
 Z_CRIT = 1.96  # 95 % two-sided
 KINDS = ("noise", "spy")
 IDS = ("mystery_ZZ", "mystery_XX")
 MAX_SEED = 2**31 - 1
+N_QUBITS = 4  # A, B + 2 environment qubits (noise) or Eve + 1 idle qubit (spy)
+BIT_ORDER = "Qiskit little-endian; clbits: 0=A, 1=B"
 
 
 def draw_seed() -> int:
@@ -75,16 +87,23 @@ def draw_culprit(seed: int) -> dict[str, Any]:
     return {"kind": kind, "F": F, "theta": theta, "theta_deg": math.degrees(theta)}
 
 
+def _uniform(src: QuantumCircuit, name: str, drop_eve: bool) -> QuantumCircuit:
+    """Copy ``src`` onto N_QUBITS qubits and a 2-bit ``out`` register (Eve's gates dropped if asked)."""
+    qc = QuantumCircuit(QuantumRegister(N_QUBITS, "q"), ClassicalRegister(2, "out"), name=name,
+                        metadata={"role": name[-2:]})
+    for inst in src.data:
+        qs = [src.find_bit(q).index for q in inst.qubits]
+        if drop_eve and qs == [2]:  # Eve's Helstrom rotation and measurement
+            continue
+        qc.append(inst.operation, qs, [src.find_bit(c).index for c in inst.clbits])
+    return qc
+
+
 def build_mystery(truth: dict[str, Any]) -> list[QuantumCircuit]:
-    """The ZZ and XX circuits of the hidden culprit (renamed: names must not leak the kind)."""
-    if truth["kind"] == "spy":
-        pair = build_qkd(theta=truth["theta"])[:2]
-    else:
-        pair = build_qkd(F=truth["F"])[:2]
-    for qc, name in zip(pair, IDS):
-        qc.name = name
-        qc.metadata = {"role": name[-2:]}
-    return pair
+    """The ZZ and XX circuits of the hidden culprit, identical in width for both kinds."""
+    spy = truth["kind"] == "spy"
+    pair = build_qkd(theta=truth["theta"])[:2] if spy else build_qkd(F=truth["F"])[:2]
+    return [_uniform(qc, name, spy) for qc, name in zip(pair, IDS)]
 
 
 def _errors(counts: dict[str, int]) -> tuple[int, int]:
@@ -133,7 +152,7 @@ def decode_mystery(counts_by_id: dict[str, dict[str, int]], truth: dict[str, Any
         "qber_Z": an.metric(qz, qz_ci, th["qber_Z"]),
         "qber_X": an.metric(qx, qx_ci, th["qber_X"]),
         "fidelity": an.metric(f, [max(0.0, f - half), min(1.0, f + half)], th["F"],
-                              method="(1 + ZZ + 2 XX)/4, assumes YY = -XX"),
+                              method="(1 + ZZ + 2 XX)/4, assumes YY = -XX; normal CI on Agresti-Coull variances (not degenerate when q_Z = 0)"),
     }
     (kz, nz), (kx, nx) = _errors(counts_by_id["mystery_ZZ"]), _errors(counts_by_id["mystery_XX"])
     return {"metrics": metrics, "detector": detect(kz, nz, kx, nx)}
@@ -163,7 +182,7 @@ def run_mystery(
         th.update(theta=truth["theta"], theta_deg=truth["theta_deg"], c=math.cos(truth["theta"] / 2.0))
     return an.make_result(
         "mystery", "batch" if ionq else "live", an.backend_name(backend), shots,
-        {"seed": int(seed), "F_range": [F_LO, F_HI]}, BIT_ORDER + " (E unused here)",
+        {"seed": int(seed), "F_range": [F_LO, F_HI]}, BIT_ORDER,
         dec["metrics"], circuit_report(circuits, compiled), counts,
         viz={"detector": dec["detector"]},
     ) | {"truth": an.to_plain(th), "detector": an.to_plain(dec["detector"])}
