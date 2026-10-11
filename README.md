@@ -198,6 +198,15 @@ and press **Run**. The first link runs on its own. Then open any chapter from th
 change its parameters and press its run button. Use **Intro** for the guided tour and **EN/ES**
 to switch language.
 
+> **First load takes about 1–2 minutes.** Qollab loads Python and Qiskit inside your browser
+> (Pyodide), and the preview may stay blank until the app's loading screen appears. Later runs
+> in the same session are fast.
+
+**Accessibility.** Everything works with the keyboard: chapter selector, city buttons, the
+sandbox form (typed coordinates work as an alternative to clicking the map) and a modal tour
+with focus trap. Status is never shown by colour alone. Text and field borders meet WCAG AA
+contrast, motion respects `prefers-reduced-motion`, and every label is in English and Spanish.
+
 **IonQ:** choose *IonQ Forte 1* or *Aria 1* (simulator, free). IonQ accepts one job per Run, so
 nothing runs by itself. Pick a chapter, including your own network in chapter 9, and press Run
 (~13 s plus queue). Press Stop → Run to try another chapter. Chapters that are not live show a
