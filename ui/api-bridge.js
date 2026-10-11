@@ -151,5 +151,24 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return res;
   }
 
-  return { info, callApi, runLevel, backendName, isBusy: () => busy || latePending };
+  // api.export_result(result, filename): no backend argument (it only downloads a file).
+  async function exportResult(result, filename) {
+    try {
+      return plain(await api.export_result.callPromising(result, filename));
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
+  // api.load_recorded(): no backend argument. Null on any failure (callers fail silently).
+  async function loadRecorded() {
+    try {
+      const rec = plain(await api.load_recorded.callPromising());
+      return rec && typeof rec === "object" ? rec : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return { info, callApi, runLevel, exportResult, loadRecorded, backendName, isBusy: () => busy || latePending };
 }

@@ -323,6 +323,7 @@ def test_fallback_prefers_ionq_recording(monkeypatch):
                                     "timestamp": "t"}}}
         return io.StringIO(json.dumps(data))
 
+    monkeypatch.delitem(api.RECORDED_OPENERS, "ionq_qpu_link")  # isolate: the real QPU recording would win
     monkeypatch.setitem(api.RECORDED_OPENERS, "ionq_aria_sim_full", ionq_rec)
     b = ionq_counting()
     assert api.rescue(b, 300)["ok"]

@@ -11,7 +11,7 @@
   explanations) is inserted with textContent, never innerHTML.
 */
 
-import { t, dictionaries } from "./i18n.js";
+import { t, getLang, dictionaries } from "./i18n.js";
 import { iconEl } from "./icons.js";
 
 const hasKey = (k) => k in dictionaries.en;
@@ -515,6 +515,51 @@ export function renderResult(container, result) {
     return;
   }
   renderBody(container, result);
+}
+
+// Real-hardware recording of chapter 1: {backend, F, ci95, shots, timestamp} from the Python
+// recording (api.load_recorded); null if there is none. Never throws.
+export function hardwareFromRecorded(rec, level = "link") {
+  for (const run of rec?.recorded ?? []) {
+    const lv = run?.result?.levels?.[level];
+    const f = lv?.metrics?.fidelity;
+    if (lv?.ok && lv.source === "ionq_packed" && typeof f?.value === "number" && Array.isArray(f.ci95)) {
+      return { backend: lv.backend, F: f.value, ci95: f.ci95, shots: lv.shots, timestamp: lv.timestamp };
+    }
+  }
+  return null;
+}
+
+// "ionq_qpu.forte-1" -> "IonQ Forte 1 (QPU)"; other names are shown as they are.
+function hardwareName(backend) {
+  const m = /^ionq_qpu\.(.+)$/.exec(String(backend));
+  if (!m) return String(backend);
+  const model = m[1].replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return `IonQ ${model} (QPU)`;
+}
+
+function hardwareDate(timestamp) {
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return String(timestamp);
+  return d.toLocaleDateString(getLang(), { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+// Compact "also measured on real hardware" card (recorded, never live).
+export function hardwareCard(hw) {
+  const card = el("div", "metric hwcard");
+  card.setAttribute("role", "group");
+  card.appendChild(el("div", "metric__name", t("res.hw.title")));
+  card.appendChild(
+    el("div", "metric__detail--text", t("res.hw.body", {
+      backend: hardwareName(hw.backend),
+      F: hw.F.toFixed(3),
+      lo: hw.ci95[0].toFixed(3),
+      hi: hw.ci95[1].toFixed(3),
+      shots: hw.shots,
+      date: hardwareDate(hw.timestamp),
+    })),
+  );
+  return card;
 }
 
 // "Link BOG-CAL · degraded ⚠ · F = 0.78": the 3D link colour, also as text.

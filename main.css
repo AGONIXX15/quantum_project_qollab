@@ -468,6 +468,9 @@ input[type="checkbox"] { accent-color: var(--cyan); width: 16px; height: 16px; }
   border: 1px solid var(--border-strong);
 }
 .btn--small:hover { border-color: var(--cyan); color: var(--cyan); }
+.export-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 10px; }
+.export-row[hidden] { display: none; }
+.export-status { font-size: 12.5px; color: var(--text); }
 .field__label--heading { margin: 0 0 8px; display: block; }
 .field--group { border: none; padding: 0; margin: 0 0 12px; min-width: 0; }
 .field--group legend { padding: 0; margin-bottom: 6px; }
@@ -527,6 +530,7 @@ input[type="range"]:disabled { opacity: 0.4; }
 .strategy--no_data { border-color: rgba(245, 166, 35, 0.5); }
 .strategy__expl { margin-top: 6px; font-family: var(--font); }
 .linkstatus__value { font-size: 16px; }
+.hwcard { border-style: dashed; }
 
 .attribution {
   position: fixed;

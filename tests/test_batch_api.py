@@ -414,3 +414,41 @@ def test_load_recorded_fails_if_a_listed_file_fails(monkeypatch):
     monkeypatch.setitem(api.RECORDED_OPENERS, "ghost", missing)
     out = api.load_recorded()
     assert out["ok"] is False and out["errors"][0]["file"] == "ghost"
+
+
+# --- IonQ Forte 1 QPU recording (chapter 1, real hardware) ---------------------------
+
+
+def _raw_ionq() -> dict:
+    with open("data/recorded/ionq_qpu_forte1_link_raw.json", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def test_ionq_recording_raw_counts_sum_to_shots():
+    raw = _raw_ionq()
+    assert sum(raw["counts"].values()) == raw["shots"] == 1000
+
+
+def test_ionq_recording_replay_reproduces_fidelity():
+    from tools import replay_ionq_recording as rp
+
+    rec = rp.build_recording(_raw_ionq())
+    lv = rec["levels"]["link"]
+    assert lv["backend"] == "ionq_qpu.forte-1"
+    assert lv["timestamp"] == "2026-10-11T06:44:53+00:00"
+    assert lv["metrics"]["fidelity"]["value"] == pytest.approx(0.9845, abs=1e-3)
+    assert lv["source"] == "ionq_packed" and lv["ok"] is True
+
+
+def test_load_recorded_lists_ionq_file():
+    out = api.load_recorded()
+    assert out.get("ok", True) is not False
+    names = [r["name"] for r in out["recorded"]]
+    assert "ionq_qpu_link" in names and "basic_simulator_full" in names
+
+
+def test_recorded_fallback_prefers_ionq_for_link_only():
+    link = api._recorded_fallback("link")
+    assert link["file"] == "ionq_qpu_link" and link["backend"] == "ionq_qpu.forte-1"
+    assert link["mode"] == "recorded"
+    assert api._recorded_fallback("swap")["file"] == "basic_simulator_full"

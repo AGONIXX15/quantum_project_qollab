@@ -1,13 +1,203 @@
 # Entangle the Andes
 
-Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Bell pair at a time.
+**Build Colombia's first quantum internet (Bogotá – Medellín – Cali), one Bell pair at a time.**
 
-> Work in progress — built during the Qollab × IonQ Global Quantum Hackathon 2026.
+Entangle the Andes is a game-like lab for quantum networking. You play on a 3D map of Colombia,
+and every link, teleportation, repeater and eavesdropper you see is a **real Qiskit circuit**
+that runs when you press **Run**. Each result comes with its 95 % confidence interval and the
+value theory predicts, so you can see exactly where the quantum network is working and where it
+is falling apart.
+
+> **The key idea: noise is someone listening.** When a link gets noisy, information about the
+> pair is leaking into the outside world. A spy works the same way: information about the pair
+> leaks to the spy. Entanglement is *monogamous*: the more a third party is correlated with
+> Bob, the less Alice can be. The app makes this one mechanism visible, with one dial.
+
+Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · Colombia node.
+
+## Why it matters
+
+Quantum networks are the next step after single quantum computers. They can send qubits
+between labs, link small processors into bigger ones, and distribute keys that are secure by
+physics. Entanglement does not survive long fibres, though. Over the real Bogotá–Medellín
+distance (~310 km of fibre), only about **6 in 10 million** photons arrive. So a working
+network needs repeaters, purification and eavesdropper checks, and those ideas are usually
+taught with equations, not hands-on.
+
+Entangle the Andes turns them into something you can run and break yourself:
+
+- **Learners** see each building block of a quantum network as a circuit they can run, with
+  the theory beside the measurement.
+- **Teachers** get 8 self-contained chapters, in English and Spanish, that run in the browser
+  with no installation.
+- **Developers** can fork the Python modules. Each protocol is a small, tested, documented
+  `build_*` / `decode_*` pair.
+
+## What you can do (8 chapters)
+
+| # | Chapter | Circuit | What you measure | Theory it is checked against |
+|---|---|---|---|---|
+| 1 | **First link** | Bell pair (H + CX), 2 qubits | ⟨XX⟩, ⟨YY⟩, ⟨ZZ⟩ → fidelity | $F = \tfrac14(1+\langle XX\rangle-\langle YY\rangle+\langle ZZ\rangle) = 1$ |
+| 2 | **Teleportation** | 3 qubits + 2 environment qubits | Bob's Bloch vector (tomography, Pauli frame) | $F_\text{tel} = \tfrac{2F+1}{3}$; classical limit $\tfrac23$ |
+| 3 | **Noise is someone listening** (lab) | 2 + 2 environment qubits | Measured vs configured fidelity | Werner state of fidelity $F$ |
+| 4 | **Noise is someone listening** (explainer) | One dial: how much leaks to a third qubit | F and CHSH S, environment vs spy | Same fidelity loss, different fingerprint |
+| 5 | **Repeater (swapping)** | 4 + up to 4 environment qubits | A–C correlators after a Bell measurement | $F = F_1F_2 + \tfrac{(1-F_1)(1-F_2)}{3}$ |
+| 6 | **Distillation** | DEJMPS, fixed vs **adaptive** | Success probability and output fidelity | $p_s$ and $F'$ (DEJMPS) |
+| 7 | **Catch the spy** | E91/BBM92 + 1 spy qubit | QBER per basis, CHSH S, key rate | $S=\sqrt2(1+\cos\tfrac\theta2)$, $Q_X=\tfrac{1-\cos(\theta/2)}{2}$ |
+| 8 | **Save the Quantum Network** | Capstone: a link breaks | Direct vs reroute vs purify, pairs used and key | Picks the cheapest strategy that reaches the target |
+
+The spy entangles itself with Bob's qubit through a controlled rotation $CR_Y(\theta)$. At
+$\theta = 0$ nobody is listening. At $\theta=\pi$ the spy intercepts everything: the average
+QBER rises to 25 % and CHSH falls to $S=\sqrt2$, below the classical bound of 2. In the
+distillation chapter, the **adaptive** strategy picks a local twist $U\otimes U^*$,
+$U\in\{I,H,S,HS,SH,HSH\}$, from the measured noise. Under amplitude damping, the textbook
+DEJMPS round does not purify (0.90 → 0.89 in the run below), and the adaptive round does
+(0.90 → 0.98).
+
+## How it works
+
+```
+ JS (three.js map, panels, tour)  ──callPromising──▶  quantum/api.py  ──▶  build_* circuits
+         ▲                                                  │                 │
+         └──────────── JSON (value, CI 95 %, theory) ◀── decode_* ◀── counts ◀┘ backend.run
+```
+
+- **Measure only at the end.** No mid-circuit measurement, `reset` or classically controlled
+  gates. Teleportation and swapping corrections are applied in Python as a **Pauli frame**: an X
+  outcome flips Z-basis bits, a Z outcome flips X-basis bits, and both flip Y. Postselection
+  (distillation) is also done in Python. This makes every circuit valid on every backend,
+  including IonQ.
+- **Noise as qubits.** Noise is built from environment qubits (a Stinespring dilation), not
+  added by a black-box simulator. The environment starts in
+  $\sqrt F|00\rangle + \sqrt{\tfrac{1-F}{3}}(|01\rangle+|10\rangle+|11\rangle)$ and then acts on Bob
+  through CX and CZ, giving an exact Werner state. The same picture gives the spy.
+- **Statistics on every number.** $\langle PP\rangle = 1-2q$ with variance $4q(1-q)/N$. Every
+  metric shows its value, a Wilson / normal 95 % interval, the theoretical value, the backend,
+  the shot count and the timestamp.
+- **Real geography.** City coordinates, great-circle distance × 1.3 fibre-route factor, and
+  0.2 dB/km at 1550 nm ($\eta = 10^{-0.02L}$). Loss changes the *rate* of pairs, not their
+  fidelity.
+- **Bit order is documented** in every result (Qiskit little-endian: the rightmost character
+  is clbit 0).
+
+### Backends
+
+| Backend | How the app uses it |
+|---|---|
+| **Built-in simulator** (default, free) | Every chapter runs live, each as a list of 3–9 circuits, 1000 shots each. |
+| AWS Braket local / IBM noise models | Same as above, with realistic hardware noise. |
+| **IonQ Aria / Forte simulators** (free) | IonQ accepts one circuit per job and one job per Run. The app **packs all circuits of a chapter side by side on disjoint qubits into one circuit** (`quantum/pack.py`) and splits the counts in Python. One Run = one chapter live; the other chapters show a clearly labelled *recorded* result. Distillation and rescue are reduced on narrow backends and marked as such. |
+
+The app never creates or fixes a backend: it always uses the one chosen in *Select QPU*.
+
+## On real quantum hardware: IonQ Forte 1
+
+We ran chapter 1 (the first link) on the **IonQ Forte 1 trapped-ion quantum computer** through
+Qollab on 11 Oct 2026. It was one packed circuit with 1000 shots, the same code path as the free
+IonQ simulators: three 2-qubit Bell circuits (XX, YY, ZZ bases) plus two 4-qubit readout
+calibration blocks, side by side on 14 qubits.
+
+| Quantity | Measured on IonQ Forte 1 (95 % CI) | Theory (ideal) |
+|---|---|---|
+| ⟨XX⟩ / ⟨YY⟩ / ⟨ZZ⟩ | 0.984 / −0.984 / 0.970 | 1 / −1 / 1 |
+| Bell-pair fidelity | **0.984** [0.979, 0.990] | 1 |
+| Fidelity with readout mitigation | **0.990** [0.986, 0.995] | 1 |
+
+The raw packed counts are stored in `data/recorded/ionq_qpu_forte1_link_raw.json`.
+`tools/replay_ionq_recording.py` (in the [source repository](https://github.com/AGONIXX15/quantum_project_qollab)) decodes them with the project's own decoder into
+`data/recorded/ionq_qpu_link.json`, so anyone can check the numbers. The app shows this result
+next to chapter 1, labelled *recorded*. All other chapters were run on simulators only.
+
+## Results (Built-in simulator, 1000 shots, 10 Oct 2026)
+
+These come from `data/recorded/basic_simulator_full.json` (the app shows them as **recorded**
+whenever a live run is not possible). Each value is shown with its 95 % confidence interval.
+
+| Chapter | Quantity | Measured (95 % CI) | Theory |
+|---|---|---|---|
+| First link | Fidelity | 1.000 [0.998, 1.000] | 1 |
+| Teleportation (link F = 0.8) | Teleported fidelity | 0.875 [0.847, 0.902] | 0.867 (> 2/3 classical) |
+| Noise | F configured 0.95 / 0.80 / 0.60 | 0.947 / 0.795 / 0.613 | 0.95 / 0.80 / 0.60 |
+| Repeater (F₁ = 0.95, F₂ = 0.90) | End-to-end fidelity | 0.860 [0.844, 0.875] | 0.857 |
+| Distillation (damping γ = 0.2) | Fixed DEJMPS / adaptive (U = SH) | 0.890 / **0.980** [0.972, 0.987] | 0.897 / 0.982 |
+| Catch the spy (θ = 120°) | QBER Z / QBER X | 0.000 / 0.264 [0.238, 0.292] | 0 / 0.25 |
+| | CHSH S (standard / device-informed angles) | 2.20 / 2.24 | 2.12 / 2.23 |
+| | Key rate: Shor–Preskill / biased bases | 0 / 0.17 | 0 / 0.19 |
+| Save the network (BOG–CAL damaged to F = 0.7, target 0.85) | Direct / reroute via Medellín | F 0.70 (no key) / **0.91** (key 0.18 per raw pair) | 0.70 / 0.90 |
+
+Every measured value agrees with theory within its 95 % interval, apart from statistical
+fluctuation at the 1–2σ level.
 
 ## How to run
 
-- **On Qollab:** open the project, pick a simulator in "Select QPU" and press **Run**.
-- **Locally:** `uv sync` then `uv run pytest`.
+**On Qollab (no install):** open the project, keep **Built-in simulator** in *Select QPU*,
+and press **Run**. The first link runs on its own. Then open any chapter from the side panel,
+change its parameters and press its run button. Use **Intro** for the guided tour and **EN/ES**
+to switch language.
+
+**IonQ:** choose *IonQ Forte 1* or *Aria 1* (simulator, free). Each Run executes one chapter
+live (~13 s); press Stop → Run to run another one.
+
+**Locally** (source code: [github.com/AGONIXX15/quantum_project_qollab](https://github.com/AGONIXX15/quantum_project_qollab)):
+
+```bash
+uv sync            # Python 3.14, Qiskit 2.5.2, qiskit-ionq 1.0.2 (same versions as Qollab)
+uv run pytest      # 251 tests, BasicSimulator with fixed seeds
+python3 -m http.server 8123   # then open http://localhost:8123/dev/index.html (UI with mock data)
+```
+
+## Testing
+
+251 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
+teleportation of 6 states; Werner noise at F = 0.6 / 0.8 / 0.95 within the confidence interval;
+the swapping and DEJMPS formulas; ideal CHSH within 3σ of $2\sqrt2$; full interception giving
+QBER ≈ 25 % and S ≈ √2; a structural check that **no circuit measures before the end**; bit
+order; and a fake IonQ backend that asserts **one `run` call with one packed circuit per Run**.
+
+## How to extend it
+
+- **Add a protocol:** write `build_<name>(...) -> list[QuantumCircuit]` and
+  `decode_<name>(counts, ...) -> dict` in a new `quantum/<name>.py`, return metrics in the
+  shared JSON contract (`value`, `ci95`, `theory`), and register it in `quantum/api.py`
+  (`RUN_LEVELS`). The UI shows any level that follows the contract.
+- **Change the map:** cities live in `quantum/geo.py`. Add a node and its fibre links, then
+  re-bake the terrain with `tools/bake_terrain.py` (in the [source repository](https://github.com/AGONIXX15/quantum_project_qollab)).
+- **Swap the noise model:** `quantum/noise.py` builds noise from environment qubits. Any Pauli
+  channel or amplitude damping plugs into every chapter.
+- **Reuse the IonQ packer:** `quantum/pack.py` is independent of this project. It packs any
+  list of measured circuits into one, for backends that take one circuit per job.
+
+| Module | Role |
+|---|---|
+| `quantum/links.py` | Bell pair and correlators (chapter 1) |
+| `quantum/teleport.py` | Teleportation with Pauli frame |
+| `quantum/noise.py` | Environment-qubit noise (Werner, damping, Pauli) |
+| `quantum/swap.py` | Entanglement swapping |
+| `quantum/purify.py` | DEJMPS, fixed and adaptive |
+| `quantum/qkd.py` | E91/BBM92, spy, CHSH, key rates |
+| `quantum/rescue.py` | Capstone strategy search |
+| `quantum/analysis.py` | Correlators, confidence intervals, key rates |
+| `quantum/batch.py`, `pack.py`, `execute.py` | Batching, IonQ packing, backend handling |
+| `quantum/geo.py` | Cities, fibre lengths, loss |
+| `ui/` | three.js map, panels, tour, glossary, i18n |
+
+## Honest limits
+
+- This is a **teaching lab, not a network simulator**. Photons, timing, memories and
+  classical communication are modelled analytically (fibre loss sets rates). They are not
+  simulated physically.
+- Noise is **injected** through environment qubits with chosen parameters. On the noiseless
+  simulator, the fidelities you see are the ones you configured. On noisy backends, hardware
+  noise adds to them.
+- Key rates are **asymptotic** (Shor–Preskill and biased bases). A real finite key needs
+  thousands of pairs. "Device-informed" CHSH uses known angles, so it is **not**
+  device-independent security.
+- On IonQ, only one chapter runs live per Run, and distillation and rescue are reduced to fit
+  25–29 qubits. Recorded results are always labelled with their backend and date.
+- Real hardware covers only chapter 1, from a single run of 1000 shots. Our readout mitigation
+  assumes the identity logical-to-physical qubit mapping and does not propagate calibration
+  uncertainty, so the mitigated value is indicative.
+- Nothing here claims a quantum advantage. The goal is understanding.
 
 ## Prior work & AI disclosure
 

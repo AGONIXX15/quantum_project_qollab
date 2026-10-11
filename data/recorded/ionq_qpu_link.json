@@ -1,0 +1,515 @@
+{
+ "ok": true,
+ "mode": "recorded",
+ "backend": "ionq_qpu.forte-1",
+ "timestamp": "2026-10-11T06:44:53+00:00",
+ "shots": 1000,
+ "levels": {
+  "link": {
+   "ok": true,
+   "level": "link",
+   "mode": "batch",
+   "backend": "ionq_qpu.forte-1",
+   "timestamp": "2026-10-11T06:44:53+00:00",
+   "shots": 1000,
+   "params": {},
+   "bit_order": "Qiskit little-endian; clbits: 0=A, 1=B | PACKED into one circuit (one IonQ job), register m, Qiskit little-endian (rightmost character = clbit 0); counts are split back per sub-circuit [link_XX: qubits 0-1, clbits 0-1, link_YY: qubits 2-3, clbits 2-3, link_ZZ: qubits 4-5, clbits 4-5, readout_0000: qubits 6-9, clbits 6-9, readout_1111: qubits 10-13, clbits 10-13]",
+   "metrics": {
+    "corr_XX": {
+     "value": 0.984,
+     "ci95": [
+      0.9685869575896228,
+      0.9918817059923607
+     ],
+     "theory": 1.0,
+     "shots": 1000
+    },
+    "corr_YY": {
+     "value": -0.984,
+     "ci95": [
+      -0.9918817059923608,
+      -0.9685869575896229
+     ],
+     "theory": -1.0,
+     "shots": 1000
+    },
+    "corr_ZZ": {
+     "value": 0.97,
+     "ci95": [
+      0.9507976104167951,
+      0.9817782063256073
+     ],
+     "theory": 1.0,
+     "shots": 1000
+    },
+    "fidelity": {
+     "value": 0.9844999999999999,
+     "ci95": [
+      0.9786018499968452,
+      0.9903981500031547
+     ],
+     "theory": 1.0,
+     "raw": 0.9844999999999999
+    },
+    "corr_XX_readout_mitigated": {
+     "value": 0.9919194851695938,
+     "ci95": [
+      0.9807876127646805,
+      1.0
+     ],
+     "theory": 1.0,
+     "clipped": false
+    },
+    "corr_YY_readout_mitigated": {
+     "value": -0.9919194851695938,
+     "ci95": [
+      -1.0,
+      -0.9807876127646805
+     ],
+     "theory": -1.0,
+     "clipped": false
+    },
+    "corr_ZZ_readout_mitigated": {
+     "value": 0.9778068095675875,
+     "ci95": [
+      0.9626177412687642,
+      0.9929958778664107
+     ],
+     "theory": 1.0,
+     "clipped": false
+    },
+    "fidelity_readout_mitigated": {
+     "value": 0.9904114449766938,
+     "ci95": [
+      0.9855374530708428,
+      0.9952854368825447
+     ],
+     "theory": 1.0,
+     "raw": 0.9904114449766938
+    }
+   },
+   "circuits": [
+    {
+     "id": "link_XX",
+     "qubits": 2,
+     "depth": 4,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 4
+    },
+    {
+     "id": "link_YY",
+     "qubits": 2,
+     "depth": 5,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 5
+    },
+    {
+     "id": "link_ZZ",
+     "qubits": 2,
+     "depth": 3,
+     "two_qubit_gates": 1,
+     "compiled_two_qubit_gates": 1,
+     "compiled_depth": 3
+    },
+    {
+     "id": "packed",
+     "qubits": 14,
+     "depth": 5,
+     "two_qubit_gates": 3
+    }
+   ],
+   "counts": {
+    "link_XX": {
+     "11": 505,
+     "00": 487,
+     "10": 6,
+     "01": 2
+    },
+    "link_YY": {
+     "01": 498,
+     "10": 494,
+     "00": 4,
+     "11": 4
+    },
+    "link_ZZ": {
+     "00": 502,
+     "11": 483,
+     "01": 10,
+     "10": 5
+    },
+    "readout_0000": {
+     "0000": 989,
+     "1000": 5,
+     "0010": 2,
+     "0100": 2,
+     "0001": 2
+    },
+    "readout_1111": {
+     "1111": 992,
+     "1101": 2,
+     "1110": 2,
+     "1011": 3,
+     "0111": 1
+    }
+   },
+   "viz": {
+    "samples": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "bloch": {
+     "A": {
+      "value": [
+       -0.014000000000000012,
+       -0.0040000000000000036,
+       0.014000000000000012
+      ],
+      "ci95": [
+       [
+        -0.07580231549740546,
+        0.047909468657824306
+       ],
+       [
+        -0.0658461310434324,
+        0.05787674623212369
+       ],
+       [
+        -0.047909468657824306,
+        0.07580231549740535
+       ]
+      ]
+     },
+     "B": {
+      "value": [
+       -0.02200000000000002,
+       0.0040000000000000036,
+       0.02400000000000002
+      ],
+      "ci95": [
+       [
+        -0.08376282477780661,
+        0.03993120831560759
+       ],
+       [
+        -0.05787674623212369,
+        0.0658461310434324
+       ],
+       [
+        -0.03793602660530104,
+        0.0857523354731543
+       ]
+      ]
+     },
+     "theory": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "leak": {
+     "value": 0.0,
+     "source": "circuit"
+    },
+    "notes": [
+     "readout mitigation assumes the identity logical-to-physical qubit mapping; calibration uncertainty is not propagated",
+     "Levels that share circuits share their shots: their metrics are correlated, not independent."
+    ],
+    "steps": {
+     "link_XX": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "link_YY": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "sdg",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "h",
+       "qubits": [
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ],
+     "link_ZZ": [
+      {
+       "name": "h",
+       "qubits": [
+        0
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "cx",
+       "qubits": [
+        0,
+        1
+       ],
+       "clbits": [],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        0
+       ],
+       "clbits": [
+        0
+       ],
+       "params": []
+      },
+      {
+       "name": "measure",
+       "qubits": [
+        1
+       ],
+       "clbits": [
+        1
+       ],
+       "params": []
+      }
+     ]
+    }
+   },
+   "packed": {
+    "layout": [
+     {
+      "name": "link_XX",
+      "qubit_offset": 0,
+      "qubits": 2,
+      "clbit_offset": 0,
+      "clbits": 2
+     },
+     {
+      "name": "link_YY",
+      "qubit_offset": 2,
+      "qubits": 2,
+      "clbit_offset": 2,
+      "clbits": 2
+     },
+     {
+      "name": "link_ZZ",
+      "qubit_offset": 4,
+      "qubits": 2,
+      "clbit_offset": 4,
+      "clbits": 2
+     },
+     {
+      "name": "readout_0000",
+      "qubit_offset": 6,
+      "qubits": 4,
+      "clbit_offset": 6,
+      "clbits": 4
+     },
+     {
+      "name": "readout_1111",
+      "qubit_offset": 10,
+      "qubits": 4,
+      "clbit_offset": 10,
+      "clbits": 4
+     }
+    ],
+    "counts": {
+     "11110000000111": 137,
+     "11110000111000": 123,
+     "11110000001011": 118,
+     "11110000111011": 117,
+     "11110000110100": 116,
+     "11110000000100": 114,
+     "11110000001000": 113,
+     "11110000110111": 112,
+     "11110000000110": 4,
+     "11110000011011": 3,
+     "11110000010111": 3,
+     "11110000100111": 3,
+     "11111000001000": 3,
+     "11110000011000": 2,
+     "11110000000000": 2,
+     "11110000001001": 2,
+     "11110000001100": 2,
+     "11110000010100": 2,
+     "11110010110111": 1,
+     "11111000110111": 1,
+     "11110000000011": 1,
+     "11110000101000": 1,
+     "11110000100100": 1,
+     "11110100000111": 1,
+     "11110100111011": 1,
+     "11010000110111": 1,
+     "11100000001000": 1,
+     "10110000001000": 1,
+     "11110010111000": 1,
+     "11010000001000": 1,
+     "11110001111000": 1,
+     "11110000110000": 1,
+     "10110000111011": 1,
+     "11111000111011": 1,
+     "01110000111000": 1,
+     "10110000111000": 1,
+     "11100000110111": 1,
+     "11110001001011": 1,
+     "11110000001111": 1,
+     "11110000111010": 1,
+     "11110000110110": 1,
+     "11110000111111": 1
+    },
+    "cap": 36
+   },
+   "ionq_reduced": false,
+   "ionq_note": [],
+   "source": "ionq_packed",
+   "recorded_from": "ionq_qpu.forte-1 (real hardware)"
+  }
+ }
+}

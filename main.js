@@ -13,7 +13,7 @@
 import * as api from "quantum.api";
 import { createBridge, DEFAULT_TIMEOUT_MS } from "./ui/api-bridge.js";
 import { NetworkScene, classifyFidelity } from "./ui/scene.js";
-import { buildParamsForm, readParams, renderResult, linkStatusCard } from "./ui/panel.js";
+import { buildParamsForm, readParams, renderResult, linkStatusCard, hardwareFromRecorded, hardwareCard } from "./ui/panel.js";
 import { hasExplain, explainTitle, explainBefore, explainAfter, cityTooltip } from "./ui/explain.js";
 import { t, tOr, getLang, setLang, onLangChange, applyI18n } from "./ui/i18n.js";
 import { setIconText } from "./ui/icons.js";
@@ -41,6 +41,9 @@ const els = {
   runStatusText: $("run-status-text"),
   runSecs: $("run-secs"),
   results: $("results"),
+  exportRow: $("export-row"),
+  exportBtn: $("export-btn"),
+  exportStatus: $("export-status"),
   explainer: $("explainer"),
   backendBadge: $("backend-badge"),
   legend: $("legend"),
@@ -60,6 +63,7 @@ const timeoutOverride = Number(query.get("timeout_ms"));
 const bridge = createBridge(api, { timeoutMs: IS_LOCAL && timeoutOverride > 0 ? timeoutOverride : DEFAULT_TIMEOUT_MS });
 
 let infoData = null;
+let hardwareLink = null; // recorded real-hardware result of chapter 1 (from Python), or null
 let scene = null;
 let levelsById = {};
 let shown = null; // { levelId, result } currently rendered
@@ -99,6 +103,7 @@ function setState(state, secs = 0, note = null) {
   const busy = state === "running";
   els.runBtn.disabled = busy;
   els.levelSelect.disabled = busy;
+  els.exportBtn.disabled = busy;
   els.results.setAttribute("aria-busy", String(busy));
 }
 
@@ -283,6 +288,7 @@ function selectLevel(id, { focus = true } = {}) {
   if (!lvl) return;
   refreshLevelTexts();
   shown = null;
+  syncExport();
   const isLeak = id === "leak";
   leak?.[isLeak ? "show" : "hide"]();
   els.regionBtn.hidden = isLeak;
@@ -372,7 +378,34 @@ async function run({ auto = false } = {}) {
   setState(result.ok === false && !hasRecorded ? "failed" : hasRecorded ? "recorded" : "success");
   shown = { levelId, result };
   renderShown();
+  syncExport();
 }
+
+// --- export (download the displayed result as JSON) -------------------------------
+// The button exists only while a level result (live or recorded) is on screen.
+function syncExport() {
+  els.exportRow.hidden = !(shown && visibleResult(shown.result));
+  els.exportStatus.textContent = "";
+}
+
+const slug = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+
+els.exportBtn.addEventListener("click", async () => {
+  const vis = shown && visibleResult(shown.result);
+  if (!vis || status.state === "running" || bridge.isBusy()) return;
+  const filename = `entangle-${slug(shown.levelId)}-${slug(vis.backend ?? bridge.backendName())}.json`;
+  els.exportBtn.disabled = true;
+  try {
+    const res = await bridge.exportResult(vis, filename);
+    els.exportStatus.textContent = res?.ok === false
+      ? t("export.failed", { error: res.error ?? "?" })
+      : res?.exported === false ? t("export.unavailable") : t("export.done", { file: filename });
+  } catch (err) {
+    els.exportStatus.textContent = t("export.failed", { error: String(err?.message ?? err) });
+  } finally {
+    els.exportBtn.disabled = status.state === "running";
+  }
+});
 
 // What to draw: the result, or the recorded fallback of a failed call.
 function visibleResult(result) {
@@ -386,6 +419,10 @@ function renderShownText() {
   const vis = visibleResult(result);
   const ls = linkStatusOf(levelId, vis);
   if (ls) els.results.appendChild(linkStatusCard(ls));
+  // Chapter 1 only, and not when the recording itself is what is on screen.
+  if (levelId === "link" && hardwareLink && vis?.backend !== hardwareLink.backend) {
+    els.results.appendChild(hardwareCard(hardwareLink));
+  }
   renderExplainer(levelId, vis);
 }
 
@@ -490,6 +527,11 @@ async function boot() {
   setState("ready");
   els.runBtn.disabled = true;
 
+  // Real-hardware recording for the chapter 1 card: loaded once, silently ignored if missing.
+  bridge.loadRecorded().then((rec) => {
+    hardwareLink = hardwareFromRecorded(rec);
+    if (hardwareLink && shown?.levelId === "link") renderShownText();
+  }).catch(() => {});
   infoData = await bridge.info();
   if (!infoData || infoData.ok === false) {
     hideLoader();

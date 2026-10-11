@@ -503,8 +503,13 @@ def _open_basic_simulator_full():
     return open("data/recorded/basic_simulator_full.json", encoding="utf-8")
 
 
+def _open_ionq_qpu_link():
+    return open("data/recorded/ionq_qpu_link.json", encoding="utf-8")
+
+
 RECORDED_OPENERS: dict[str, Callable[[], Any]] = {
     "basic_simulator_full": _open_basic_simulator_full,
+    "ionq_qpu_link": _open_ionq_qpu_link,
 }
 
 
