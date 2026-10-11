@@ -47,8 +47,12 @@ export function explainAfter(levelId, r) {
     }
     case "qkd": {
       const s = r?.metrics?.chsh_standard?.value;
-      if (typeof s === "number") return t(s > 2 ? "ex.qkd.safe" : "ex.qkd.lost", { S: s.toFixed(2) });
-      return t("ex.qkd.generic");
+      const qx = r?.metrics?.qber_X?.value;
+      if (typeof s !== "number") return t("ex.qkd.generic");
+      if (s <= 2) return t("ex.qkd.lost", { S: s.toFixed(2) });
+      // CHSH > 2 alone does not mean "safe": a partial spy keeps S > 2 but pushes QBER past 11 %.
+      if (typeof qx === "number" && qx > 0.11) return t("ex.qkd.leaky", { S: s.toFixed(2), Q: (qx * 100).toFixed(1) });
+      return t("ex.qkd.safe", { S: s.toFixed(2) });
     }
     case "rescue": {
       const msg = r?.viz?.recommendation?.message;

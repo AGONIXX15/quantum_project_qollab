@@ -79,7 +79,7 @@ const EN = {
   "level.link.summary": "Bell pair measured in X, Y, Z: F from three correlators.",
   "level.teleport.title": "Teleportation",
   "level.teleport.summary": "Teleport a qubit over a (noisy) link; Pauli frame in Python.",
-  "level.noise.title": "Noise is someone listening",
+  "level.noise.title": "Noise = environment",
   "level.noise.summary": "Werner noise from environment qubits: measured F vs configured F.",
   "level.swap.title": "Repeater (swapping)",
   "level.swap.summary": "Join two links with a Bell measurement; F = F1 F2 + (1-F1)(1-F2)/3.",
@@ -203,7 +203,7 @@ const EN = {
     "The classical limit is 2/3: above it, the teleportation is genuinely quantum.",
   "ex.teleport.good": "High-fidelity teleportation.",
   "ex.teleport.bad": "Noise degraded the teleported state.",
-  "ex.noise.title": "Noise is someone listening",
+  "ex.noise.title": "Noise = environment",
   "ex.noise.before":
     "Link noise is modelled as an <b>environment that carries information away</b> (as if someone were listening). " +
     "The more noise, the more photons turn <b>orange</b> (different results). We compare the measured fidelity with the configured one for each F.",
@@ -225,9 +225,10 @@ const EN = {
   "ex.qkd.before":
     "Alice and Bob make a <b>secret key</b> by sharing Bell pairs. If a <b>spy (Eve)</b> listens, she introduces errors: " +
     "the <b>QBER</b> goes up and the <b>CHSH</b> value goes down. If CHSH > 2 the entanglement is genuine and the line is safe; if it drops, there is a spy.",
-  "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2: genuine entanglement, safe line.",
+  "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2 and a low QBER: genuine entanglement, a secret key is possible.",
+  "ex.qkd.leaky": "CHSH = <b>{S}</b> &gt; 2, so some entanglement survives, but QBER X = <b>{Q}%</b> is above 11 %: no secret key. Someone is listening.",
   "ex.qkd.lost": "CHSH = <b>{S}</b> ≤ 2: the quantum correlation is gone (possible spy).",
-  "ex.qkd.generic": "Look at the CHSH value: above 2 the line is safe.",
+  "ex.qkd.generic": "Look at CHSH (above 2 means entanglement) and QBER (below 11 % allows a key).",
   "ex.rescue.title": "Save the quantum network",
   "ex.rescue.before":
     "A link got <b>damaged</b>. There are three ways to deliver an end-to-end pair: use it <b>directly</b>, " +
@@ -523,7 +524,7 @@ const ES = {
   "level.link.summary": "Par de Bell medido en X, Y, Z: F a partir de tres correladores.",
   "level.teleport.title": "Teletransporte",
   "level.teleport.summary": "Teletransporta un qubit por un enlace (ruidoso); marco de Pauli en Python.",
-  "level.noise.title": "El ruido es alguien escuchando",
+  "level.noise.title": "Ruido = entorno",
   "level.noise.summary": "Ruido de Werner desde qubits de entorno: F medida vs F configurada.",
   "level.swap.title": "Repetidor (swapping)",
   "level.swap.summary": "Une dos enlaces con una medida de Bell; F = F1 F2 + (1-F1)(1-F2)/3.",
@@ -641,7 +642,7 @@ const ES = {
     "El límite clásico es 2/3: por encima de eso, el teletransporte es genuinamente cuántico.",
   "ex.teleport.good": "Teletransporte de alta fidelidad.",
   "ex.teleport.bad": "El ruido degradó el estado teletransportado.",
-  "ex.noise.title": "El ruido es alguien escuchando",
+  "ex.noise.title": "Ruido = entorno",
   "ex.noise.before":
     "El ruido de un enlace se modela como un <b>entorno que se lleva información</b> (como si alguien escuchara). " +
     "Cuanto más ruido, más fotones salen <b>naranjas</b> (resultados distintos). Comparamos la fidelidad medida con la configurada para cada F.",
@@ -663,9 +664,10 @@ const ES = {
   "ex.qkd.before":
     "Alice y Bob generan una <b>clave secreta</b> compartiendo pares de Bell. Si un <b>espía (Eve)</b> escucha, introduce errores: " +
     "sube el <b>QBER</b> y baja el valor <b>CHSH</b>. Si CHSH > 2, hay entrelazamiento genuino y la línea es segura; si baja, hay espía.",
-  "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2: entrelazamiento genuino, línea segura.",
+  "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2 y QBER bajo: entrelazamiento genuino, se puede generar clave secreta.",
+  "ex.qkd.leaky": "CHSH = <b>{S}</b> &gt; 2, así que queda algo de entrelazamiento, pero QBER X = <b>{Q}%</b> supera el 11 %: no hay clave secreta. Alguien está escuchando.",
   "ex.qkd.lost": "CHSH = <b>{S}</b> ≤ 2: la correlación cuántica se perdió (posible espía).",
-  "ex.qkd.generic": "Mira el valor CHSH: por encima de 2 la línea es segura.",
+  "ex.qkd.generic": "Mira CHSH (sobre 2 hay entrelazamiento) y el QBER (bajo 11 % permite clave).",
   "ex.rescue.title": "Salva la red cuántica",
   "ex.rescue.before":
     "Un enlace quedó <b>dañado</b>. Hay tres formas de entregar un par extremo a extremo: usarlo <b>directo</b>, " +

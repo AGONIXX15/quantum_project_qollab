@@ -179,7 +179,7 @@ def info() -> dict[str, Any]:
          "params": {"shots": shots, "theta_deg": _p(0, 180, d["teleport"]["theta_deg"], "deg"),
                     "phi_deg": _p(-360, 360, d["teleport"]["phi_deg"], "deg"),
                     "F": _p(0.25, 1, d["teleport"]["F"])}},
-        {"id": "noise", "title": "Noise is someone listening", "function": "level_noise",
+        {"id": "noise", "title": "Noise = environment", "function": "level_noise",
          "summary": "Werner noise from environment qubits: measured F vs configured F.",
          "params": {"shots": shots, "Fs": {"default": d["noise"]["Fs"], "min": 0.25, "max": 1, "length": [1, 5]},
                     "mode": {**modes, "default": d["noise"]["mode"]}}},
