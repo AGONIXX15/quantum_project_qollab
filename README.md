@@ -57,6 +57,9 @@ Entangle the Andes turns them into something you can run and break yourself:
 - **Developers** can fork the Python modules. Each protocol is a small, tested, documented
   `build_*` / `decode_*` pair.
 
+For a ready-made 50-minute lesson plan with guided questions and a sandbox exercise, see the
+[teaching guide](https://github.com/AGONIXX15/quantum_project_qollab/blob/main/docs/teaching_guide.md).
+
 ### What a real Bogotá–Medellín–Cali network would need
 
 `tools/network_budget.py` (in the source repository) applies the app's own models, `geo.py`
@@ -241,6 +244,14 @@ chapter 9 chain checked against the swapping formula for 1, 2 and 5 hops.
   channel or amplitude damping plugs into every chapter.
 - **Reuse the IonQ packer:** `quantum/pack.py` is independent of this project. It packs any
   list of measured circuits into one, for backends that take one circuit per job.
+
+### Fork it for your region
+
+- City presets and the map box live in `quantum/sandbox.py` (`PRESET_CITIES`, `BBOX`: lon −92..−58, lat −8..16).
+  Edit those, and `quantum/geo.py` for the three main cities, to use your own nodes.
+- The 3D terrain is baked for the current region only. A new region also needs
+  `python3 tools/bake_terrain.py [--cache DIR]` (Pillow + numpy, downloads the map data) with its
+  `BBOX` edited (the UI reads the box from the baked data), and the same box in `quantum/sandbox.py`.
 
 | Module | Role |
 |---|---|
