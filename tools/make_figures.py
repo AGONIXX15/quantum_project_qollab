@@ -22,6 +22,7 @@ REC = ROOT / "data" / "recorded"
 OUT = ROOT / "docs" / "img"
 SIM_FILE = "basic_simulator_full.json"
 QPU_FILE = "ionq_qpu_link.json"
+IONQ_SIM_FILE = "ionq_sim_forte1.json"
 
 # Okabe-Ito colour-blind safe palette
 BLUE, VERM, GREEN, ORANGE, SKY, PINK, YEL, BLACK = (
@@ -47,12 +48,22 @@ REQUIRED_METRICS: dict[str, list[tuple[str, str]]] = {
         ("rescue", "fidelity_direct"), ("rescue", "fidelity_reroute"), ("rescue", "fidelity_purify_fixed"),
     ],
     QPU_FILE: [("link", "fidelity")],
+    IONQ_SIM_FILE: [
+        ("link", "fidelity"), ("teleport", "fidelity"),
+        ("noise", "fidelity@0.95"), ("noise", "fidelity@0.8"), ("noise", "fidelity@0.6"),
+        ("swap", "fidelity"),
+        ("purify", "fidelity_input"), ("purify", "fidelity_adaptive"),
+        ("purify", "raw_pairs_adaptive"), ("purify", "p_s_adaptive"),
+        ("qkd", "qber_X"), ("qkd", "qber_Z"), ("qkd", "chsh_standard"), ("qkd", "chsh_smart"),
+        ("rescue", "fidelity_direct"), ("rescue", "fidelity_purify_fixed"),
+    ],
 }
 
 
 def load_recordings(rec_dir: Path = REC) -> dict[str, dict]:
-    """Return {file name: parsed JSON} for the two recordings used by the figures."""
-    return {name: json.loads((rec_dir / name).read_text()) for name in (SIM_FILE, QPU_FILE)}
+    """Return {file name: parsed JSON} for the recordings used by the figures."""
+    return {name: json.loads((rec_dir / name).read_text())
+            for name in (SIM_FILE, QPU_FILE, IONQ_SIM_FILE)}
 
 
 def metric(rec: dict, level: str, key: str) -> dict:
@@ -92,74 +103,102 @@ def _dots(ax, xs, pts, colors, markers, labels, xticklabel_size=9.5):
     ax.set_xlim(min(xs) - 0.6, max(xs) + 0.6)
 
 
+def _groups(ax, labels, series, xticklabel_size=9.0):
+    """Grouped dots: one x group per label, one marker/colour per series (None = no point).
+
+    Each series is (points per group, colour, marker); a point is a ``_pt`` tuple or None.
+    Theory (open black diamond) is drawn once per group, right of the measured points.
+    """
+    k, step = len(series), 0.24
+    offs = [(i - (k - 1) / 2) * step for i in range(k)]
+    for g in range(len(labels)):
+        th = None
+        for (pts, col, mk), off in zip(series, offs):
+            pt = pts[g]
+            if pt is None:
+                continue
+            v, lo, hi, t = pt
+            ax.errorbar([g + off], [v], yerr=[[v - lo], [hi - v]], fmt=mk, color=col, ms=7.5,
+                        capsize=3.5, elinewidth=1.8, zorder=3)
+            th = t if th is None else th
+        if th is not None:
+            ax.plot([g + offs[-1] + 0.2], [th], marker="D", mfc="white", mec=BLACK, mew=1.4, ms=8,
+                    ls="none", zorder=4)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, fontsize=xticklabel_size)
+    ax.set_xlim(-0.65, len(labels) - 1 + 0.65 + (0.1 if k > 2 else 0))
+
+
 def fig_results_vs_theory(rs: dict) -> Path:
-    sim, qpu = rs[SIM_FILE], rs[QPU_FILE]
+    sim, qpu, isim = rs[SIM_FILE], rs[QPU_FILE], rs[IONQ_SIM_FILE]
     shots = sim["shots"]
-    fig, axs = plt.subplots(3, 3, figsize=(9.6, 9.0))
+    fig, axs = plt.subplots(3, 3, figsize=(10.8, 9.4))
     ax = axs.ravel()
     kw = dict(fontsize=9)
+    S, I, Q = (BLUE, "o"), (GREEN, "^"), (VERM, "s")
+
+    def two(level, keys, **_):
+        """Series for simulator and IonQ noise model over metric keys (None if absent)."""
+        out = []
+        for rec in (sim, isim):
+            out.append([_pt(rec, level, k) if k in rec["levels"][level]["metrics"] else None
+                        for k in keys])
+        return [(out[0], *S), (out[1], *I)]
 
     # 1 link
-    p = [_pt(sim, "link", "fidelity"), _pt(qpu, "link", "fidelity")]
-    _dots(ax[0], [0, 1], p, [BLUE, VERM], ["o", "s"], ["Simulator", "IonQ Forte 1\n(real QPU)"])
     ax[0].set_ylim(0.96, 1.01)
+    _groups(ax[0], ["Bell pair"], two("link", ["fidelity"]) + [([_pt(qpu, "link", "fidelity")], *Q)])
     ax[0].set_title("1. First link: Bell F")
 
     # 2 teleport
-    p = [_pt(sim, "teleport", "fidelity")]
-    _dots(ax[1], [0], p, [BLUE], ["o"], ["Teleported\nstate"])
+    _groups(ax[1], ["Teleported\nstate"], two("teleport", ["fidelity"]))
     ax[1].axhline(2 / 3, color=VERM, ls="--", lw=1.6)
-    ax[1].text(0.55, 2 / 3 + 0.012, "classical limit 2/3", color=VERM, ha="right", **kw)
+    ax[1].text(0.6, 2 / 3 + 0.012, "classical limit 2/3", color=VERM, ha="right", **kw)
     ax[1].set_ylim(0.55, 1.0)
     ax[1].set_title("2. Teleportation F")
 
     # 3 noise
     Fs = [0.95, 0.8, 0.6]
-    p = [_pt(sim, "noise", f"fidelity@{F}") for F in Fs]
-    _dots(ax[2], [0, 1, 2], p, [BLUE] * 3, ["o"] * 3, [f"F={F}" for F in Fs])
+    _groups(ax[2], [f"F={F}" for F in Fs], two("noise", [f"fidelity@{F}" for F in Fs]))
     ax[2].set_ylim(0.55, 1.0)
     ax[2].set_xlabel("configured fidelity", fontsize=9.5)
     ax[2].set_title("3. Noise (lab): F")
 
     # 4 swap
     f1, f2 = sim["levels"]["swap"]["params"]["F1"], sim["levels"]["swap"]["params"]["F2"]
-    p = [_pt(sim, "swap", "fidelity")]
-    _dots(ax[3], [0], p, [BLUE], ["o"], [f"swap of\nF1={f1}, F2={f2}"])
-    ax[3].set_ylim(0.8, 0.9)
+    _groups(ax[3], [f"swap of\nF1={f1}, F2={f2}"], two("swap", ["fidelity"]))
+    ax[3].set_ylim(0.75, 0.9)
     ax[3].set_title("5. Repeater: swapped F")
 
-    # 5 purify
-    keys = ["fidelity_input", "fidelity_fixed", "fidelity_adaptive"]
-    p = [_pt(sim, "purify", k) for k in keys]
+    # 5 purify (the IonQ run was reduced to fit 29 qubits: no fixed-DEJMPS baseline)
     u_ad = metric(sim, "purify", "fidelity_adaptive")["u"]
-    _dots(ax[4], [0, 1, 2], p, [BLUE] * 3, ["o"] * 3, ["input", "fixed\nDEJMPS", f"adaptive\nU={u_ad}"])
-    ax[4].set_ylim(0.85, 1.0)
+    _groups(ax[4], ["input", "fixed\nDEJMPS", f"adaptive\nU={u_ad}"],
+            two("purify", ["fidelity_input", "fidelity_fixed", "fidelity_adaptive"]))
+    ax[4].set_ylim(0.84, 1.0)
     ax[4].set_title("6. Distillation (damping)")
 
     # 6 QBER
-    p = [_pt(sim, "qkd", "qber_Z"), _pt(sim, "qkd", "qber_X")]
-    _dots(ax[5], [0, 1], p, [BLUE, BLUE], ["o", "o"], ["QBER Z", "QBER X"])
-    ax[5].axhline(0.110, color=VERM, ls="--", lw=1.6)
-    ax[5].text(1.55, 0.118, "key threshold 11 %", color=VERM, ha="right", **kw)
-    ax[5].set_ylim(-0.02, 0.32)
     th_deg = round(np.degrees(sim["levels"]["qkd"]["params"]["theta"]))
+    _groups(ax[5], ["QBER Z", "QBER X"], two("qkd", ["qber_Z", "qber_X"]))
+    ax[5].axhline(0.110, color=VERM, ls="--", lw=1.6)
+    ax[5].text(1.6, 0.118, "key threshold 11 %", color=VERM, ha="right", **kw)
+    ax[5].set_ylim(-0.02, 0.32)
     ax[5].set_title(f"7a. Catch the spy, θ={th_deg}°: QBER")
 
     # 7 CHSH
-    p = [_pt(sim, "qkd", "chsh_standard"), _pt(sim, "qkd", "chsh_smart")]
-    _dots(ax[6], [0, 1], p, [BLUE, BLUE], ["o", "o"], ["CHSH S\nstandard", "CHSH S\ndevice-informed"])
+    _groups(ax[6], ["CHSH S\nstandard", "CHSH S\ndevice-informed"],
+            two("qkd", ["chsh_standard", "chsh_smart"]))
     ax[6].axhline(2.0, color=VERM, ls="--", lw=1.6)
-    ax[6].text(1.55, 2.012, "classical bound 2", color=VERM, ha="right", **kw)
-    ax[6].set_ylim(1.9, 2.4)
+    ax[6].text(1.6, 2.012, "classical bound 2", color=VERM, ha="right", **kw)
+    ax[6].set_ylim(1.82, 2.4)
     ax[6].set_title(f"7b. Catch the spy, θ={th_deg}°: CHSH")
 
-    # 8 rescue
-    keys = ["fidelity_direct", "fidelity_reroute", "fidelity_purify_fixed"]
-    p = [_pt(sim, "rescue", k) for k in keys]
-    _dots(ax[7], [0, 1, 2], p, [BLUE] * 3, ["o"] * 3, ["direct\n(broken)", "reroute", "fixed\npurify"])
+    # 8 rescue (the IonQ run has no reroute: reduced to fit 29 qubits)
+    _groups(ax[7], ["direct\n(broken)", "reroute", "fixed\npurify"],
+            two("rescue", ["fidelity_direct", "fidelity_reroute", "fidelity_purify_fixed"]))
     tgt = sim["levels"]["rescue"]["params"]["target_F"]
     ax[7].axhline(tgt, color=VERM, ls="--", lw=1.6)
-    ax[7].text(2.55, tgt + 0.008, f"target {tgt}", color=VERM, ha="right", **kw)
+    ax[7].text(2.6, tgt + 0.008, f"target {tgt}", color=VERM, ha="right", **kw)
     ax[7].set_ylim(0.65, 0.96)
     ax[7].set_title("8. Save the network: link F")
 
@@ -171,17 +210,20 @@ def fig_results_vs_theory(rs: dict) -> Path:
     ax[8].axis("off")
     handles = [
         Line2D([], [], marker="o", color=BLUE, ls="-", ms=7.5, label="measured (95 % CI), simulator"),
-        Line2D([], [], marker="s", color=VERM, ls="-", ms=7.5, label="measured (95 % CI), IonQ Forte 1 QPU"),
+        Line2D([], [], marker="^", color=GREEN, ls="-", ms=8, label="measured (95 % CI), IonQ Forte 1\nnoise-model simulator"),
+        Line2D([], [], marker="s", color=VERM, ls="-", ms=7.5, label="measured (95 % CI), IonQ Forte 1\nreal QPU (chapter 1 only)"),
         Line2D([], [], marker="D", mfc="white", mec=BLACK, mew=1.4, ls="none", ms=8, label="theory"),
         Line2D([], [], color=VERM, ls="--", lw=1.6, label="classical bound / threshold / target"),
     ]
-    ax[8].legend(handles=handles, loc="center", frameon=True, fontsize=9.5, title="Legend",
-                 title_fontsize=10.5)
-    fig.suptitle(f"Measured vs theory, all chapters  ·  backend: basic_simulator "
-                 f"(+ real {qpu['backend']} for chapter 1)\n{shots} shots", 
-                 fontsize=12, fontweight="bold", y=0.995)
-    fig.tight_layout(rect=(0, 0.03, 1, 0.955))
-    _footer(fig, [SIM_FILE, QPU_FILE])
+    ax[8].legend(handles=handles, loc="upper center", frameon=True, fontsize=9, title="Legend",
+                 title_fontsize=10.5, labelspacing=0.9)
+    fig.text(0.5, 0.032, "No IonQ point for purify 'fixed' and rescue 'reroute': those runs were reduced "
+             "to fit 29 qubits.", ha="center", va="bottom", fontsize=8.5, color="#333333")
+    fig.suptitle(f"Measured vs theory, all chapters  ·  backends: basic_simulator, "
+                 f"{isim['backend']} (IonQ Forte 1 noise model),\nreal {qpu['backend']} for chapter 1  ·  "
+                 f"{shots} shots", fontsize=12, fontweight="bold", y=0.995)
+    fig.tight_layout(rect=(0, 0.055, 1, 0.95))
+    _footer(fig, [SIM_FILE, IONQ_SIM_FILE, QPU_FILE])
     return _save(fig, "results_vs_theory.png")
 
 

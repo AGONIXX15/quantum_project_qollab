@@ -187,12 +187,51 @@ whenever a live run is not possible). Each value is shown with its 95 % confiden
 | | Key rate: Shor–Preskill / biased bases | 0 / 0.17 | 0 / 0.19 |
 | Save the network (BOG–CAL damaged to F = 0.7, target 0.85) | Direct / reroute via Medellín | F 0.70 (no key) / **0.91** (key 0.18 per raw pair) | 0.70 / 0.90 |
 
-![Measured vs theory for every chapter, with 95 % CIs. Chapter 1 also shows the real IonQ Forte 1 result.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/results_vs_theory.png)
+![Measured vs theory for every chapter, with 95 % CIs. Triangles: IonQ Forte 1 noise-model simulator; chapter 1 also shows the real IonQ Forte 1 QPU.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/results_vs_theory.png)
 
 *Generated from `data/recorded/*.json` by `tools/make_figures.py` (in the source repository).*
 
-Every measured value agrees with theory within its 95 % interval, apart from statistical
-fluctuation at the 1–2σ level.
+On the ideal simulator, every measured value agrees with theory within its 95 % interval, apart
+from statistical fluctuation at the 1–2σ level. The green triangles (IonQ noise model) are
+discussed below.
+
+### Same chapters on IonQ's Forte 1 noise model
+
+Every chapter was also run once on Qollab's free **IonQ Forte 1 noise-model simulator**
+(backend `ionq_simulator`, 1000 shots, 11 Oct 2026, default parameters, one packed circuit per
+level), so the numbers include IonQ's device noise model.
+
+| Chapter | Metric | Simulator | IonQ Forte 1 noise model (95 % CI) | Theory |
+|---|---|---|---|---|
+| First link | Fidelity | 1.000 | 0.988 [0.983, 0.993] | 1 |
+| Teleportation | Teleported fidelity | 0.875 | 0.820 [0.792, 0.848] | 0.867 |
+| Noise | F at 0.95 / 0.80 / 0.60 | 0.947 / 0.794 / 0.613 | 0.937 / 0.796 / 0.598 | 0.95 / 0.80 / 0.60 |
+| Repeater | End-to-end fidelity | 0.860 | 0.809 [0.791, 0.827] | 0.857 |
+| Distillation | Adaptive fidelity (input F: 0.900 / 0.865) | 0.980 | 0.928 [0.914, 0.941] | 0.982 |
+| Catch the spy | QBER X | 0.264 | 0.272 [0.245, 0.300] | 0.250 |
+| | CHSH S, standard angles | 2.204 | 1.954 [1.849, 2.059] | 2.121 |
+| | CHSH S, device-informed angles | 2.239 | 2.110 [2.027, 2.194] | 2.236 |
+| Save the network | Direct link fidelity | 0.701 | 0.697 [0.675, 0.719] | 0.700 |
+
+How to read it (one run per chapter, 1000 shots, so treat differences of one or two
+intervals with care):
+
+- Gate noise in the noise model lowers the multi-qubit chapters (teleportation, repeater,
+  distillation) by about 0.05, below their theory values.
+- Where the result is set by noise we configure ourselves (the noise lab, the damaged direct
+  link), the two backends are close; at F = 0.95 the IonQ value (0.937) sits just below theory.
+- Spy chapter: QBER X matches theory, while QBER Z rises from 0 to 0.016 [0.010, 0.026] (device
+  noise). The biased key rate drops from 0.167 to 0.037 [0.000, 0.116]. Both CHSH values lose
+  about 0.13–0.17. With standard angles the interval [1.849, 2.059] no longer excludes 2; with
+  device-informed angles it still does, narrowly ([2.027, 2.194]). The difference between the
+  two methods is not statistically conclusive in a single run.
+- On IonQ, distillation and the rescue chapter were reduced to fit 29 qubits, so there is no
+  fixed-DEJMPS baseline and no reroute point (the figure leaves them empty).
+
+The raw packed counts are in `data/recorded/ionq_sim_forte1_raw.json`;
+`tools/replay_ionq_sim.py` (in the source repository) decodes them with the project's own decoder
+into `data/recorded/ionq_sim_forte1.json`, so anyone can reproduce the numbers. These files are
+repo-only evidence: the app does not load them.
 
 ## How to run
 
@@ -219,13 +258,13 @@ labelled recorded result.
 
 ```bash
 uv sync            # Python 3.14, Qiskit 2.5.2, qiskit-ionq 1.0.2 (same versions as Qollab)
-uv run pytest      # 293 tests, BasicSimulator with fixed seeds
+uv run pytest      # 295 tests, BasicSimulator with fixed seeds
 python3 -m http.server 8123   # then open http://localhost:8123/dev/index.html (UI with mock data)
 ```
 
 ## Testing
 
-293 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
+295 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
 teleportation of 6 states; Werner noise at F = 0.6 / 0.8 / 0.95 within the confidence interval;
 the swapping and DEJMPS formulas; ideal CHSH within 3σ of $2\sqrt2$; full interception giving
 QBER ≈ 25 % and S ≈ √2; a structural check that **no circuit measures before the end**; bit

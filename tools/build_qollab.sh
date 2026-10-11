@@ -21,6 +21,8 @@ find "$DEST/quantum" -name "__pycache__" -type d -prune -exec rm -rf {} +
 find "$DEST/quantum" -name "*.pyc" -delete
 cp -r "$ROOT/data" "$DEST/data"
 find "$DEST/data" -name ".gitkeep" -delete
+# Repo-only evidence (IonQ Forte 1 noise-model run); the app never loads it, so it is not uploaded.
+rm -f "$DEST"/data/recorded/ionq_sim_forte1*.json
 if find "$DEST" -type f -iname "*mock*" | grep -q .; then echo "FAIL: a bundled file name contains 'mock'" >&2; exit 1; fi
 
 COUNT="$(find "$DEST" -type f | wc -l)"
