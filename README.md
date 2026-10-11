@@ -57,6 +57,25 @@ Entangle the Andes turns them into something you can run and break yourself:
 - **Developers** can fork the Python modules. Each protocol is a small, tested, documented
   `build_*` / `decode_*` pair.
 
+### What a real Bogotá–Medellín–Cali network would need
+
+`tools/network_budget.py` (in the source repository) applies the app's own models, `geo.py`
+for fibre loss and `swap.py` for swapping, to the real route. It assumes a source of 10⁹ pair
+attempts per second, ideal quantum memories and deterministic swaps, so the rates are upper
+bounds.
+
+- **Direct fibre does not work.** Over the 736 km Bogotá–Medellín–Cali route, η ≈ 1.9 × 10⁻¹⁵,
+  which is about one pair every 6 days.
+- **One repeater in Medellín** (2 segments of 368 km) gives about 43 pairs/s. The end-to-end
+  F is 0.980 with links of F = 0.99 (≈ 17 key bits/s), or 0.903 with links of F = 0.95
+  (≈ 7 key bits/s).
+- **Repeaters trade fidelity for rate.** Each extra segment multiplies the rate but lowers F.
+  With F = 0.95 links, more than 3 segments push F below the key threshold (0.835). With
+  F = 0.99 links, up to 18 segments (~41 km each) still allow a key, at only 0.008 bits per
+  pair. This is why the app pairs repeaters with purification (chapters 5, 6 and 8).
+
+![Left: pair rate vs number of segments on the 736 km route, rising from about 10⁻⁶ to 10⁸ pairs/s. Right: end-to-end fidelity falling with the number of segments for link fidelities 0.99 and 0.95, with the key threshold 0.835 and the CHSH line 0.7803.](https://raw.githubusercontent.com/AGONIXX15/quantum_project_qollab/main/docs/img/network_budget.png)
+
 ## What you can do (9 chapters)
 
 | # | Chapter | Circuit | What you measure | Theory it is checked against |
@@ -179,20 +198,22 @@ and press **Run**. The first link runs on its own. Then open any chapter from th
 change its parameters and press its run button. Use **Intro** for the guided tour and **EN/ES**
 to switch language.
 
-**IonQ:** choose *IonQ Forte 1* or *Aria 1* (simulator, free). Each Run executes one chapter
-live (~13 s); press Stop → Run to run another one.
+**IonQ:** choose *IonQ Forte 1* or *Aria 1* (simulator, free). IonQ accepts one job per Run, so
+nothing runs by itself. Pick a chapter, including your own network in chapter 9, and press Run
+(~13 s plus queue). Press Stop → Run to try another chapter. Chapters that are not live show a
+labelled recorded result.
 
 **Locally** (source code: [github.com/AGONIXX15/quantum_project_qollab](https://github.com/AGONIXX15/quantum_project_qollab)):
 
 ```bash
 uv sync            # Python 3.14, Qiskit 2.5.2, qiskit-ionq 1.0.2 (same versions as Qollab)
-uv run pytest      # 290 tests, BasicSimulator with fixed seeds
+uv run pytest      # 293 tests, BasicSimulator with fixed seeds
 python3 -m http.server 8123   # then open http://localhost:8123/dev/index.html (UI with mock data)
 ```
 
 ## Testing
 
-290 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
+293 tests (`tests/`) check every circuit against theory. They include: Bell fidelity ≥ 0.98;
 teleportation of 6 states; Werner noise at F = 0.6 / 0.8 / 0.95 within the confidence interval;
 the swapping and DEJMPS formulas; ideal CHSH within 3σ of $2\sqrt2$; full interception giving
 QBER ≈ 25 % and S ≈ √2; a structural check that **no circuit measures before the end**; bit

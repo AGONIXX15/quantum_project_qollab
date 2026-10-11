@@ -720,11 +720,20 @@ async function boot() {
       tour.open(els.tourBtn); // dismissible intro; the autorun below keeps going behind it
     }, 350),
   );
-  // One click -> results: the first level runs by itself with its defaults, on every backend.
-  run({ auto: true }).catch((err) => {
-    console.error(err);
-    setState("failed");
-  });
+  // One click -> results: the first level runs by itself with its defaults. Not on IonQ: it
+  // accepts one job per Run, so the user chooses which chapter spends it (incl. chapter 9).
+  if (/ionq/i.test(bridge.backendName())) {
+    const hint = els.results.querySelector(".results__empty");
+    if (hint) {
+      hint.dataset.i18n = "autorun.ionq";
+      hint.textContent = t("autorun.ionq");
+    }
+  } else {
+    run({ auto: true }).catch((err) => {
+      console.error(err);
+      setState("failed");
+    });
+  }
 
   // Harmless diagnostics hook (console / tests).
   window.__ETA__ = {
