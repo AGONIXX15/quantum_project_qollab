@@ -21,6 +21,8 @@ is falling apart.
 
 Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · Colombia node.
 
+**Demo video (2–3 min):** https://youtu.be/imjGHrXFxu4
+
 ## Beyond the tutorial: what is new here
 
 1. **One mechanism for noise and eavesdropping.** The environment and the spy are both a
