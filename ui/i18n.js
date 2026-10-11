@@ -224,7 +224,7 @@ const EN = {
   "ex.qkd.title": "Catch the spy (QKD)",
   "ex.qkd.before":
     "Alice and Bob make a <b>secret key</b> by sharing Bell pairs. If a <b>spy (Eve)</b> listens, she introduces errors: " +
-    "the <b>QBER</b> goes up and the <b>CHSH</b> value goes down. If CHSH > 2 the entanglement is genuine and the line is safe; if it drops, there is a spy.",
+    "the <b>QBER</b> goes up and the <b>CHSH</b> value goes down. CHSH > 2 proves entanglement, but a key also needs QBER below 11 %: a partial spy can keep CHSH above 2 and still leave no secret key.",
   "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2 and a low QBER: genuine entanglement, a secret key is possible.",
   "ex.qkd.leaky": "CHSH = <b>{S}</b> &gt; 2, so some entanglement survives, but QBER X = <b>{Q}%</b> is above 11 %: no secret key. Someone is listening.",
   "ex.qkd.lost": "CHSH = <b>{S}</b> ≤ 2: the quantum correlation is gone (possible spy).",
@@ -663,7 +663,7 @@ const ES = {
   "ex.qkd.title": "Atrapa al espía (QKD)",
   "ex.qkd.before":
     "Alice y Bob generan una <b>clave secreta</b> compartiendo pares de Bell. Si un <b>espía (Eve)</b> escucha, introduce errores: " +
-    "sube el <b>QBER</b> y baja el valor <b>CHSH</b>. Si CHSH > 2, hay entrelazamiento genuino y la línea es segura; si baja, hay espía.",
+    "sube el <b>QBER</b> y baja el valor <b>CHSH</b>. CHSH > 2 prueba entrelazamiento, pero para la clave también hace falta un QBER bajo 11 %: un espía parcial puede dejar CHSH sobre 2 y aun así no quedar clave secreta.",
   "ex.qkd.safe": "CHSH = <b>{S}</b> &gt; 2 y QBER bajo: entrelazamiento genuino, se puede generar clave secreta.",
   "ex.qkd.leaky": "CHSH = <b>{S}</b> &gt; 2, así que queda algo de entrelazamiento, pero QBER X = <b>{Q}%</b> supera el 11 %: no hay clave secreta. Alguien está escuchando.",
   "ex.qkd.lost": "CHSH = <b>{S}</b> ≤ 2: la correlación cuántica se perdió (posible espía).",
