@@ -328,7 +328,9 @@ chapter 9 chain checked against the swapping formula for 1, 2 and 5 hops.
   device-independent security.
 - On IonQ, only one chapter runs live per Run, and distillation and rescue are reduced to fit
   25–29 qubits. Recorded results are always labelled with their backend and date.
-- Real hardware covers only chapter 1, from a single run of 1000 shots. Our readout mitigation
+- Real hardware covers only chapter 1, from a single run of 1000 shots: that one job used all
+  of the team's Qollab grant credits, so the other chapters could not be sent to the QPU. To
+  compensate, every chapter was run on IonQ's Forte 1 noise model (see above). Our readout mitigation
   assumes the identity logical-to-physical qubit mapping and does not propagate calibration
   uncertainty, so the mitigated value is indicative.
 - Chapter 9 treats each link as a single fibre span between two cities. Noise is a Werner
