@@ -6,9 +6,16 @@ from qiskit.circuit import ControlFlowOp
 
 from qiskit.providers.fake_provider import GenericBackendV2
 
-from quantum import execute, links, noise, purify, qkd, sandbox, swap, teleport
+from quantum import execute, links, mystery, noise, purify, qkd, sandbox, swap, teleport
 
 FORBIDDEN = {"reset", "initialize", "state_preparation", "if_else", "while_loop", "for_loop", "switch_case"}
+
+
+def _renamed(circuits: list[QuantumCircuit], suffix: str) -> list[QuantumCircuit]:
+    """Mystery circuits share names across culprits (by design): suffix them for the unique-name check."""
+    for qc in circuits:
+        qc.name += suffix
+    return circuits
 
 
 def all_circuits() -> list[QuantumCircuit]:
@@ -27,6 +34,8 @@ def all_circuits() -> list[QuantumCircuit]:
         *purify.build_purify(None, ("I", "HSH"), mode="precision"),
         *qkd.build_qkd(2.0, smart_direct=True),
         *qkd.build_qkd(0.0, F=0.85),
+        *_renamed(mystery.build_mystery({"kind": "noise", "F": 0.9, "theta": 0.0}), "_noise"),
+        *_renamed(mystery.build_mystery({"kind": "spy", "F": 0.9, "theta": 1.4}), "_spy"),
         *sandbox.build_sandbox(1),
         *sandbox.build_sandbox(3),
         *sandbox.build_sandbox(6),

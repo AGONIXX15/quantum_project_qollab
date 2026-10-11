@@ -182,6 +182,53 @@ async function sandboxImpl(backend, graph, shots = 1000, seed = 0) {
   return result;
 }
 
+// ---- chapter 4 mystery ("Who is listening?") mock: plausible shapes, NOT measurements ----
+function mysteryImpl(backend, seed = null, shots = 1000) {
+  if (flag() === "hang") return new Promise(() => {});
+  const name = String(backend?.name ?? "local_mock");
+  const ionq = name.toLowerCase().includes("ionq");
+  if (ionq && ionqUsed) {
+    return ionqUsed.level === "mystery"
+      ? { ...ionqUsed.result, cached_run: true }
+      : { ok: false, code: "ionq_job_used", error: "IonQ allows one job per Run; this Run already used its job. Press Stop and Run again." };
+  }
+  if (ionq && flag() === "aria") {
+    return { ok: false, code: "ionq_too_wide", needed_qubits: 14, max_qubits: 6, error: "mystery needs more qubits than the backend has; nothing was submitted" };
+  }
+  const s = seed ?? Math.floor(Math.random() * 2 ** 31);
+  const u = (k) => { const x = Math.sin(s * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const kind = u(1) < 0.5 ? "noise" : "spy";
+  const F = 0.8 + 0.17 * u(2);
+  const c = 2 * F - 1;
+  const qzT = kind === "noise" ? (2 * (1 - F)) / 3 : 0;
+  const qxT = kind === "noise" ? qzT : (1 - c) / 2;
+  const wiggle = (q, k) => Math.max(0, q + (u(k) - 0.5) * 0.01);
+  const qz = wiggle(qzT, 3), qx = wiggle(qxT, 4);
+  const ci = (q) => { const h = 1.96 * Math.sqrt(Math.max(q * (1 - q), 1e-4) / shots); return [Math.max(0, q - h), q + h]; };
+  const pooled = (qz + qx) / 2;
+  const se = Math.sqrt(Math.max(pooled * (1 - pooled), 1e-9) * (2 / shots));
+  const z = (qx - qz) / se;
+  const p = Math.min(1, Math.exp(-0.717 * Math.abs(z) - 0.416 * z * z));
+  const verdict = z >= 1.96 && ci(qz)[1] < qx ? "spy" : Math.abs(z) < 1.96 && ci(qz)[0] > 0 ? "noise" : "undecided";
+  const Fm = (1 + (1 - 2 * qz) + 2 * (1 - 2 * qx)) / 4;
+  const result = {
+    ok: true, level: "mystery", mode: ionq ? "batch" : "live", backend: name, timestamp: new Date().toISOString(), shots,
+    params: { seed: s, F_range: [0.8, 0.97] }, bit_order: "Qiskit little-endian (mock)",
+    metrics: {
+      qber_Z: { value: qz, ci95: ci(qz), theory: qzT },
+      qber_X: { value: qx, ci95: ci(qx), theory: qxT },
+      fidelity: { value: Fm, ci95: [Fm - 0.02, Math.min(1, Fm + 0.02)], theory: F },
+    },
+    truth: kind === "spy" ? { kind, F, c, theta: 2 * Math.acos(c), theta_deg: (360 / Math.PI) * Math.acos(c) } : { kind, F },
+    detector: { verdict, z, p_value: p, confidence: verdict === "spy" ? 1 - p : verdict === "noise" ? p : 0, alpha: 0.05 },
+    counts: {}, circuits: [{ id: "mystery_ZZ", qubits: 4, depth: 7, two_qubit_gates: 4 }, { id: "mystery_XX", qubits: 4, depth: 8, two_qubit_gates: 4 }],
+    ...(ionq ? { source: "ionq_packed", cached_run: false } : {}),
+  };
+  if (ionq) ionqUsed = { level: "mystery", result, params: { seed, shots } };
+  return new Promise((r) => setTimeout(() => r(result), 400));
+}
+
+export const mystery = fn(mysteryImpl);
 export const sandbox_presets = fn(async () => ({ ok: true, cities: SB_CITIES, bbox: { lat: [-8, 16], lon: [-92, -58] }, example: SB_EXAMPLE }));
 export const info = fn(async () => ({
   ...mock.info(),

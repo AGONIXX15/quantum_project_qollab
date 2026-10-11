@@ -444,6 +444,16 @@ async function runLeak() {
   else setState(out.anyFailed ? "failed" : out.anyRecorded ? "recorded" : "success");
 }
 
+// Chapter "leak", mystery mode ("Who is listening?"): one api.mystery call (IonQ: the Run's single job).
+async function runMysteryChapter() {
+  if (status.state === "running") return;
+  setState("running", 0);
+  await nextFrame();
+  const out = await leak.mystery();
+  if (out.busy) setState("ready");
+  else setState(out.anyFailed ? "failed" : "success");
+}
+
 async function run({ auto = false } = {}) {
   const levelId = els.levelSelect.value;
   if (!levelsById[levelId]) return;
@@ -718,6 +728,9 @@ async function boot() {
   leak = createLeakView(els.leakView, {
     run: (level, params) => bridge.runLevel(level, params, { onTick: (secs) => setState("running", secs) }),
     requestMeasure: runLeak,
+    runMystery: () => bridge.runMystery(/ionq/i.test(bridge.backendName()) ? 500 : 1000, { onTick: (secs) => setState("running", secs) }),
+    requestMystery: runMysteryChapter,
+    isIonq: () => /ionq/i.test(bridge.backendName()),
   });
   leak.hide();
   els.regionBtn.addEventListener("click", () => {

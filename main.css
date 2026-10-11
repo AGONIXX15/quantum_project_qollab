@@ -671,6 +671,19 @@ input[type="range"]:disabled { opacity: 0.4; }
   #app.is-leak .panel--right { display: none; }
   .leak { right: 16px; }
 }
+.leak__mys { margin: 14px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, 0.03); }
+.leak__mys-h { margin: 0 0 4px; font-family: var(--font-display); font-size: 15px; color: var(--warm-2); }
+.leak__mys-intro { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.leak__mys-hint { margin: 8px 0 0; font-size: 12.5px; color: var(--text); }
+.leak__mys-out { margin-top: 10px; outline-offset: 4px; }
+.leak__mys-sub { margin: 10px 0 6px; font-family: var(--font-display); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warm-2); }
+.leak__mys-nums, .leak__mys-q { margin: 8px 0; font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--text); }
+.leak__mys-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.leak__mys-btns .btn[aria-pressed="true"] { border-color: var(--warm-2); color: var(--warm-2); font-weight: 700; }
+.leak__mys-btns .btn:disabled { cursor: default; }
+.leak__mys-reveal { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(47, 224, 192, 0.08), rgba(242, 161, 92, 0.08)); }
+.leak__mys-reveal p { margin: 6px 0; font-size: 13.5px; line-height: 1.5; }
+.leak__mys-you { font-weight: 700; }
 @media (max-width: 760px) { .leak__figs, .leak__charts { grid-template-columns: minmax(0, 1fr); } }
 .leak__fig, .leak__chart { min-width: 0; }
 @media (max-width: 980px) {

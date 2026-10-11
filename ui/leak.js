@@ -15,6 +15,10 @@
   QBER/E91, Ekert, PRL 67, 661 (1991). Full list in README > References & credits.
   Measured points come from api.run_level 'noise' (Fs=[F]) and 'qkd' (theta_deg) through the
   same bridge as every level; they are drawn as dots with 95 % CI bands over the theory lines.
+  "Who is listening?" (mystery mode): api.mystery draws a hidden culprit (noise or spy, same fidelity
+  range), measures the Bell pair in Z and X with real circuits and returns the QBER fingerprint, the
+  truth and a detector verdict (two-proportion z-test of QBER_X vs QBER_Z). The UI shows the
+  fingerprint first, asks the player to guess, and only then reveals truth and verdict.
   Backend text is only ever inserted with textContent.
 */
 
@@ -186,8 +190,53 @@ function parseSpy(res, requestedDeg) {
   return { thetaDeg: deg, qz, qx, S: m.chsh_standard.value, sLo, sHi, F, Flo: F == null ? null : F - Fhw, Fhi: F == null ? null : F + Fhw };
 }
 
-export function createLeakView(root, { run, onBusy, requestMeasure }) {
-  const state = { dial: 0.4, measured: null, measuring: false };
+// ---- mystery helpers (pure) ----------------------------------------------------
+const MYSTERY_KINDS = ["noise", "spy"];
+
+// api.mystery result -> { qz, qzLo, qzHi, qx, ..., F, truth, detector, backend, shots } or null if malformed.
+export function parseMystery(res) {
+  const m = res?.ok === true ? res.metrics : null;
+  const [zLo, zHi] = ciOf(m?.qber_Z), [xLo, xHi] = ciOf(m?.qber_X);
+  if (typeof m?.qber_Z?.value !== "number" || typeof m?.qber_X?.value !== "number" || zLo == null || xLo == null) return null;
+  if (!MYSTERY_KINDS.includes(res.truth?.kind) || !res.detector) return null;
+  return {
+    qz: m.qber_Z.value, qzLo: zLo, qzHi: zHi, qzTh: m.qber_Z.theory,
+    qx: m.qber_X.value, qxLo: xLo, qxHi: xHi, qxTh: m.qber_X.theory,
+    F: m.fidelity?.value, truth: res.truth, detector: res.detector, backend: res.backend, shots: res.shots,
+  };
+}
+
+// Two QBER bars with 95 % CI whiskers. Z = solid, X = hatched, each labelled with its number (not colour only).
+function fingerprint(my, aria) {
+  const W = 360, H = 210, L = 46, R = 12, T = 22, B = 44;
+  const top = Math.max(0.05, Math.min(0.5, Math.ceil((Math.max(my.qzHi, my.qxHi) * 1.25) / 0.05) * 0.05));
+  const py = (v) => T + (1 - Math.min(v, top) / top) * (H - T - B);
+  const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "leak-chart", role: "img", "aria-label": aria });
+  root.appendChild(svg("defs", {}, svg("pattern", { id: "myst-hatch", width: 8, height: 8, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, [
+    svg("rect", { width: 8, height: 8, fill: "#8d4f17" }), svg("line", { x1: 0, y1: 0, x2: 0, y2: 8, stroke: "#ffd9b0", "stroke-width": 3 })])));
+  for (let i = 0; i <= 4; i++) {
+    const v = (top * i) / 4;
+    root.appendChild(svg("line", { x1: L, x2: W - R, y1: py(v), y2: py(v), stroke: "rgba(150,180,220,0.16)" }));
+    root.appendChild(txt(L - 6, py(v) + 4, `${(v * 100).toFixed(top < 0.1 ? 1 : 0)}%`, { "text-anchor": "end" }));
+  }
+  const bars = [
+    { x: 100, label: t("mystery.fp.z"), v: my.qz, lo: my.qzLo, hi: my.qzHi, fill: "#1d6f63" },
+    { x: 240, label: t("mystery.fp.x"), v: my.qx, lo: my.qxLo, hi: my.qxHi, fill: "url(#myst-hatch)" },
+  ];
+  for (const b of bars) {
+    root.appendChild(svg("rect", { x: b.x - 28, y: py(b.v), width: 56, height: Math.max(1, py(0) - py(b.v)), fill: b.fill, stroke: INK, "stroke-width": 1.2 }));
+    root.appendChild(svg("line", { x1: b.x, x2: b.x, y1: py(b.hi), y2: py(b.lo), stroke: INK, "stroke-width": 2 }));
+    for (const e of [b.hi, b.lo]) root.appendChild(svg("line", { x1: b.x - 8, x2: b.x + 8, y1: py(e), y2: py(e), stroke: INK, "stroke-width": 2 }));
+    root.appendChild(txt(b.x, H - B + 16, b.label, { "text-anchor": "middle", fill: INK, "font-weight": 600 }));
+    root.appendChild(txt(b.x, H - B + 30, `${(b.v * 100).toFixed(1)}% [${(b.lo * 100).toFixed(1)}, ${(b.hi * 100).toFixed(1)}]`, { "text-anchor": "middle", "font-size": 10.5 }));
+  }
+  root.appendChild(svg("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "none", stroke: "rgba(150,180,220,0.35)" }));
+  return root;
+}
+
+export function createLeakView(root, { run, onBusy, requestMeasure, runMystery, requestMystery, isIonq }) {
+  // my.phase: idle | running | guess | revealed | failed (the 4 UI states: ready / running / success / failed)
+  const state = { dial: 0.4, measured: null, measuring: false, my: { phase: "idle" }, myId: 0 };
 
   root.replaceChildren();
   const head = el("div", "leak__head");
@@ -232,7 +281,23 @@ export function createLeakView(root, { run, onBusy, requestMeasure }) {
   const tableWrap = el("div");
   details.append(summary, tableWrap);
 
-  root.append(head, dialBox, figs, charts, legend, actions, takeaway, details);
+  // ---- mystery ("Who is listening?") ----
+  const mys = el("section", "leak__mys");
+  mys.setAttribute("aria-labelledby", "leak-mys-h");
+  const mysH = el("h3", "leak__mys-h");
+  mysH.id = "leak-mys-h";
+  const mysIntro = el("p", "leak__mys-intro");
+  const mysBtn = el("button", "btn btn--primary");
+  mysBtn.type = "button";
+  const mysHint = el("p", "leak__mys-hint");
+  const mysStatus = el("p", "leak__status");
+  mysStatus.setAttribute("role", "status");
+  mysStatus.setAttribute("aria-live", "polite");
+  const mysOut = el("div", "leak__mys-out");
+  mysOut.tabIndex = -1; // focus target after the reveal
+  mys.append(mysH, mysIntro, mysBtn, mysHint, mysStatus, mysOut);
+
+  root.append(head, dialBox, figs, charts, legend, actions, mys, takeaway, details);
 
   // ---- rendering ----------------------------------------------------------------
   function bar(conc, who) {
@@ -273,7 +338,8 @@ export function createLeakView(root, { run, onBusy, requestMeasure }) {
     dialRead.textContent = t("leak.read", { deg: th.thetaDeg.toFixed(0), F: th.F.toFixed(3) });
     dial.setAttribute("aria-valuetext", t("leak.valuetext", { p: Math.round(state.dial * 100), F: th.F.toFixed(2) }));
     measureBtn.textContent = state.measuring ? t("leak.measuring") : t("leak.measure");
-    measureBtn.disabled = state.measuring;
+    measureBtn.disabled = state.measuring || state.my.phase === "running";
+    renderMystery();
 
     // figures
     const fill = (fig, kind, cap, ab, who, line) => {
@@ -370,6 +436,130 @@ export function createLeakView(root, { run, onBusy, requestMeasure }) {
     return tb;
   }
 
+  // ---- mystery ---------------------------------------------------------------------
+  const pc1 = (v) => `${(v * 100).toFixed(1)}%`;
+
+  function renderMystery() {
+    const my = state.my;
+    mysH.textContent = t("mystery.h");
+    mysIntro.textContent = t("mystery.intro");
+    mysBtn.textContent = my.phase === "running" ? t("leak.measuring") : my.phase === "revealed" ? t("mystery.btn.again") : t("mystery.btn");
+    mysBtn.disabled = my.phase === "running" || state.measuring;
+    const ionq = !!isIonq?.();
+    mysHint.textContent = ionq ? t("mystery.ionq") : "";
+    mysHint.hidden = !ionq;
+    mysOut.setAttribute("aria-busy", String(my.phase === "running"));
+    if (my.phase === "idle" || my.phase === "running" || my.phase === "failed" || !my.parsed) {
+      mysOut.replaceChildren();
+      return;
+    }
+    const p = my.parsed;
+    const nodes = [];
+    nodes.push(el("h4", "leak__mys-sub", t("mystery.fp.h")));
+    const fig = el("div", "leak__chart");
+    fig.appendChild(fingerprint(p, t("mystery.fp.aria", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? p.F.toFixed(2) : "—" })));
+    nodes.push(fig);
+    nodes.push(el("p", "leak__mys-nums", t("mystery.fp.text", { z: pc1(p.qz), x: pc1(p.qx), F: p.F != null ? p.F.toFixed(3) : "—", n: p.shots, backend: String(p.backend ?? "") })));
+    const pick = el("div", "leak__mys-pick");
+    pick.setAttribute("role", "group");
+    pick.setAttribute("aria-label", t("mystery.pick"));
+    pick.appendChild(el("p", "leak__mys-q", t("mystery.pick")));
+    const row = el("div", "leak__mys-btns");
+    for (const kind of MYSTERY_KINDS) {
+      const b = el("button", "btn btn--small", t(`mystery.pick.${kind}`));
+      b.type = "button";
+      b.dataset.guess = kind;
+      b.disabled = my.phase === "revealed";
+      if (my.phase === "revealed") b.setAttribute("aria-pressed", String(my.guess === kind));
+      b.addEventListener("click", () => guess(kind));
+      row.appendChild(b);
+    }
+    pick.appendChild(row);
+    nodes.push(pick);
+    if (my.phase === "revealed") nodes.push(revealBlock(p, my.guess));
+    mysOut.replaceChildren(...nodes);
+  }
+
+  function truthText(tr) {
+    const c = typeof tr.c === "number" ? tr.c : 2 * tr.F - 1;
+    return tr.kind === "spy"
+      ? t("mystery.truth.spy", { deg: (tr.theta_deg ?? (tr.theta * 180) / Math.PI).toFixed(0), F: tr.F.toFixed(3), qx: pc1((1 - c) / 2) })
+      : t("mystery.truth.noise", { F: tr.F.toFixed(3), q: pc1((2 * (1 - tr.F)) / 3) });
+  }
+
+  function revealBlock(p, guessed) {
+    const d = p.detector, tr = p.truth;
+    const box = el("div", "leak__mys-reveal");
+    box.appendChild(el("h4", "leak__mys-sub", t("mystery.reveal.h")));
+    const right = guessed === tr.kind;
+    box.appendChild(el("p", "leak__mys-you", `${right ? t("mystery.you.right") : t("mystery.you.wrong")} ${t(`mystery.pick.${guessed}`)} → ${t(`mystery.pick.${tr.kind}`)}`));
+    box.appendChild(el("p", "leak__mys-truth", truthText(tr)));
+    const v = ["noise", "spy"].includes(d.verdict) ? d.verdict : "undecided";
+    const conf = t(`mystery.conf.${v}`, { c: Math.round((d.confidence ?? 0) * 100) });
+    box.appendChild(el("p", "leak__mys-verdict", t("mystery.verdict", {
+      verdict: t(`mystery.verdict.${v}`), z: Number(d.z).toFixed(2), p: Number(d.p_value) < 0.001 ? "<0.001" : Number(d.p_value).toFixed(3), conf,
+    })));
+    box.appendChild(el("p", "leak__mys-why", t(`mystery.why.${tr.kind}`)));
+    if (v === "undecided") box.appendChild(el("p", "leak__mys-why", t("mystery.why.undecided")));
+    box.appendChild(el("p", "leak__mys-same", t("mystery.same")));
+    return box;
+  }
+
+  function guess(kind) {
+    if (state.my.phase !== "guess") return;
+    state.my = { ...state.my, phase: "revealed", guess: kind };
+    renderMystery();
+    mysOut.querySelector(".leak__mys-reveal")?.scrollIntoView?.({ block: "nearest" });
+    mysOut.focus({ preventScroll: true }); // the reveal sits in the focused region; mysStatus announces it
+    const right = kind === state.my.parsed.truth.kind;
+    setMysStatus(`${right ? t("mystery.you.right") : t("mystery.you.wrong")} ${truthText(state.my.parsed.truth)}`, "ok");
+  }
+
+  function setMysStatus(msg, kind = "info") {
+    mysStatus.replaceChildren();
+    if (!msg) return;
+    mysStatus.append(icon(kind === "ok" ? "ok" : kind === "warn" ? "warn" : kind === "run" ? "running" : "info", 14), document.createTextNode(msg));
+  }
+
+  // Runs api.mystery once. Returns { busy, anyFailed }. Stale results are dropped.
+  async function mystery() {
+    if (state.measuring || state.my.phase === "running") return { busy: true, anyFailed: false };
+    const id = ++state.myId;
+    state.my = { phase: "running" };
+    onBusy?.(true);
+    setMysStatus(t("mystery.running"), "run");
+    render();
+    const out = { busy: false, anyFailed: false };
+    let res = null;
+    try {
+      res = await runMystery?.();
+    } catch (err) {
+      res = { ok: false, error: String(err?.message ?? err) };
+    }
+    onBusy?.(false);
+    if (id !== state.myId) { out.busy = true; return out; } // stale: a newer run owns the state
+    const parsed = parseMystery(res);
+    if (res === null || res === undefined) {
+      out.busy = true;
+      state.my = { phase: "idle" };
+      setMysStatus(t("leak.busy"), "info");
+    } else if (parsed) {
+      state.my = { phase: "guess", parsed, guess: null };
+      setMysStatus(t("mystery.measured"), "ok");
+    } else {
+      out.anyFailed = true;
+      state.my = { phase: "failed" };
+      const msg = res.code === "ionq_job_used" ? t("mystery.ionq_used") : res.code === "ionq_too_wide" ? t("mystery.too_wide")
+        : res.code === "previous_pending" ? t("leak.pending") : res.error === "timeout" ? t("mystery.timeout") : t("mystery.fail");
+      if (res.code === "previous_pending") { out.anyFailed = false; out.busy = true; }
+      setMysStatus(msg, "warn");
+    }
+    render();
+    if (state.my.phase === "guess") mysOut.querySelector("[data-guess]")?.focus();
+    else mysBtn.focus();
+    return out;
+  }
+
   // ---- measure --------------------------------------------------------------------
   function setStatus(msg, kind = "info") {
     status.replaceChildren();
@@ -436,14 +626,16 @@ export function createLeakView(root, { run, onBusy, requestMeasure }) {
     render();
   });
   measureBtn.addEventListener("click", () => (requestMeasure ? requestMeasure() : measure()));
+  mysBtn.addEventListener("click", () => (requestMystery ? requestMystery() : mystery()));
 
   render();
   return {
     measure,
+    mystery,
     render,
     show() { root.hidden = false; },
     hide() { root.hidden = true; },
     isVisible: () => !root.hidden,
-    isMeasuring: () => state.measuring,
+    isMeasuring: () => state.measuring || state.my.phase === "running",
   };
 }

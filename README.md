@@ -26,7 +26,11 @@ Theme: **Quantum Unlocked** · Qollab × IonQ Global Quantum Hackathon 2026 · C
 1. **One mechanism for noise and eavesdropping.** The environment and the spy are both a
    third qubit that gets correlated with Bob (a Stinespring dilation). The same circuit
    family gives Werner noise and an intercept attack, so learners can see that they cost the
-   same fidelity but leave different fingerprints (QBER per basis, where CHSH breaks).
+   same fidelity but leave different fingerprints (QBER per basis, where CHSH breaks). In the
+   *Who is listening?* mystery mode of chapter 4 a hidden culprit (noise or spy, drawn with
+   fidelity in the same 0.80 to 0.97 range) damages a pair. You run real Z and X circuits,
+   read the two QBER bars with their 95 % intervals, make your call, and compare with a
+   two-proportion z-test; this makes the idea testable with data, not only a slogan.
 2. **Adaptive purification that works where the textbook protocol fails.** Under amplitude
    damping, standard DEJMPS does not improve the pair (0.900 → 0.890 in our run). Choosing a
    local twist $U\otimes U^*$ from measured XX/YY/ZZ correlators does (→ 0.980).
@@ -86,7 +90,7 @@ bounds.
 | 1 | **First link** | Bell pair (H + CX), 2 qubits | ⟨XX⟩, ⟨YY⟩, ⟨ZZ⟩ → fidelity | $F = \tfrac14(1+\langle XX\rangle-\langle YY\rangle+\langle ZZ\rangle) = 1$ |
 | 2 | **Teleportation** | 3 qubits + 2 environment qubits | Bob's Bloch vector (tomography, Pauli frame) | $F_\text{tel} = \tfrac{2F+1}{3}$; classical limit $\tfrac23$ |
 | 3 | **Noise is someone listening** (lab) | 2 + 2 environment qubits | Measured vs configured fidelity | Werner state of fidelity $F$ |
-| 4 | **Noise is someone listening** (explainer) | One dial: how much leaks to a third qubit | F and CHSH S, environment vs spy | Same fidelity loss, different fingerprint |
+| 4 | **Noise is someone listening** (explainer + mystery mode *Who is listening?*) | One dial: how much leaks to a third qubit; mystery mode: a hidden culprit (noise or spy), Bell pair measured in Z and X with real circuits | F and CHSH S, environment vs spy; mystery: QBER Z vs QBER X with 95 % CI, then a z-test verdict | Same fidelity loss, different fingerprint: $Q_Z=Q_X=\tfrac{2(1-F)}{3}$ (noise) vs $Q_Z=0,\ Q_X=1-F$ (spy) |
 | 5 | **Repeater (swapping)** | 4 + up to 4 environment qubits | A–C correlators after a Bell measurement | $F = F_1F_2 + \tfrac{(1-F_1)(1-F_2)}{3}$ |
 | 6 | **Distillation** | DEJMPS, fixed vs **adaptive** | Success probability and output fidelity | $p_s$ and $F'$ (DEJMPS) |
 | 7 | **Catch the spy** | E91/BBM92 + 1 spy qubit | QBER per basis, CHSH S, key rate | $S=\sqrt2(1+\cos\tfrac\theta2)$, $Q_X=\tfrac{1-\cos(\theta/2)}{2}$ |
@@ -302,6 +306,7 @@ chapter 9 chain checked against the swapping formula for 1, 2 and 5 hops.
 | `quantum/qkd.py` | E91/BBM92, spy, CHSH, key rates |
 | `quantum/rescue.py` | Capstone strategy search |
 | `quantum/sandbox.py` | Chapter 9: graph validation, route choice, N-hop swapping chain |
+| `quantum/mystery.py` | Chapter 4 mystery mode: hidden noise-or-spy culprit, Z/X fingerprint, z-test detector |
 | `quantum/analysis.py` | Correlators, confidence intervals, key rates |
 | `quantum/batch.py`, `pack.py`, `execute.py` | Batching, IonQ packing, backend handling |
 | `quantum/geo.py` | Cities, fibre lengths, loss |

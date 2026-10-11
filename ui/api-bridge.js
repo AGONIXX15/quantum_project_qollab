@@ -157,6 +157,12 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return callApi(api.sandbox, [graph, shots, seed], hooks);
   }
 
+  // api.mystery(backend, seed, shots): "Who is listening?" (chapter 4). seed null = a fresh hidden culprit.
+  // Same busy/stale/timeout handling as runSandbox. No recorded fallback exists.
+  async function runMystery(shots = 1000, hooks, seed = null) {
+    return callApi(api.mystery, [seed, shots], hooks);
+  }
+
   // api.sandbox_presets(): no backend argument. Returns {cities, example, bbox} or null on any failure
   // (the UI has a built-in list).
   async function sandboxPresets() {
@@ -196,5 +202,5 @@ export function createBridge(api, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     }
   }
 
-  return { info, callApi, runLevel, runSandbox, sandboxPresets, exportResult, loadRecorded, backendName, isBusy: () => busy || latePending };
+  return { info, callApi, runLevel, runSandbox, runMystery, sandboxPresets, exportResult, loadRecorded, backendName, isBusy: () => busy || latePending };
 }

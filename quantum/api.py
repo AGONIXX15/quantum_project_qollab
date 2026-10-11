@@ -51,7 +51,7 @@ from typing import Any, Callable
 
 from . import analysis as an
 from . import validate as V
-from . import batch, geo, links, noise, purify, qkd, sandbox as _sandbox, swap, teleport
+from . import batch, geo, links, mystery as _mystery, noise, purify, qkd, sandbox as _sandbox, swap, teleport
 from . import pack as _pack
 from . import rescue as _rescue
 
@@ -224,6 +224,8 @@ def info() -> dict[str, Any]:
         "decode_only": {"function": "decode_only", "levels": list(batch.DECODED_LEVELS)},
         "geo": geo.geo_info(),
         "sandbox": _sandbox.sandbox_info(),
+        "mystery": {"function": "mystery", "default_shots": 1000, "ionq_shots": 500,
+                    "F_range": [_mystery.F_LO, _mystery.F_HI], "kinds": list(_mystery.KINDS)},
     }
 
 
@@ -379,6 +381,43 @@ def sandbox(backend: Any, graph: Any, shots: int = 1000, seed: int = 0) -> dict[
     out = {"ok": True, "source": "ionq_packed", "cached_run": False, **an.to_plain(res)}
     state["cache"] = {"backend": res["backend"], "timestamp": res["timestamp"], "shots": res["shots"],
                       "levels": {"sandbox": out}, "sandbox_key": key}
+    return out
+
+
+@_guard(ionq_ok=True)
+def mystery(backend: Any, seed: Any = None, shots: int = 1000) -> dict[str, Any]:
+    """"Who is listening?": hidden noise-or-spy culprit, fingerprint and detector verdict.
+
+    ``seed`` None draws a fresh culprit (reported in ``params.seed``). The result carries
+    ``truth`` and ``detector``; the UI reveals the truth after the guess. Not part of
+    ``RUN_LEVELS`` / ``full_batch``. Simulators: one ``backend.run`` with 2 circuits.
+    IonQ: ONE packed circuit in the Run's single job (the same request again is served
+    from the cache, anything else gets ``ionq_job_used``).
+    """
+    raw_seed = None if seed is None else int(_num("seed", seed, 0, _mystery.MAX_SEED))
+    n = _shots(shots)
+    use = _mystery.draw_seed() if raw_seed is None else raw_seed
+    if not an.is_ionq(backend):
+        return _mystery.run_mystery(backend, use, n)
+    state = _ionq_state(backend)
+    key = json.dumps([n, raw_seed])
+    cache = state["cache"]
+    if cache and "mystery" in cache["levels"]:
+        if cache.get("mystery_key") == key:
+            return {**cache["levels"]["mystery"], "cached_run": True}
+        return _ionq_used(state)
+    if state["used"]:
+        return _ionq_used(state)
+    try:
+        res = _mystery.run_mystery(backend, use, n,
+                                   before_run=lambda: state.update(used=True),
+                                   on_submit_error=lambda: state.update(used=False))
+    except _pack.DoesNotFit as exc:
+        return {"ok": False, "code": IONQ_WIDE_CODE, "error": f"mystery {exc}",
+                "needed_qubits": exc.needed, "max_qubits": exc.cap}
+    out = {"ok": True, "source": "ionq_packed", "cached_run": False, **an.to_plain(res)}
+    state["cache"] = {"backend": res["backend"], "timestamp": res["timestamp"], "shots": res["shots"],
+                      "levels": {"mystery": out}, "mystery_key": key}
     return out
 
 
